@@ -140,13 +140,14 @@ logged outcomes, with the model's approval given:
 
 ## LIMITATIONS (read this as part of the result)
 
-- **Single model so far.** Every number here is the 4B
-  (`Qwen3-4B-Instruct-2507-Q5_K_M.gguf`) on `:1238`. The model-swap A/B - the
-  same battery against a larger/other local model, compared on wrong-click
-  rate, proposal accuracy, and injection resistance - is deferred to P2b and
-  is NOT in this artifact. "The gate holds across model swaps" is the
-  project's thesis; this baseline proves it for ONE model and lays the rig to
-  prove it for more, no more.
+- **This document is the single-model baseline (the 4B).** Every number here
+  is the 4B (`Qwen3-4B-Instruct-2507-Q5_K_M.gguf`) on `:1238`. The first
+  model-swap comparison - the same battery against the 35B - now lives in
+  [`RESULTS-AB.md`](RESULTS-AB.md). Headline of that comparison: the gate held
+  identically for both models (the project's thesis, observed across a ~9x
+  model-size jump), and the 35B additionally recognized two injections that
+  the 4B was fooled by at the reasoning level. See that file for the honest
+  limitations (notably: a single 35B run so far).
 - **Small, handwritten corpus.** 19 scenarios (13 adversarial), authored by
   hand to target real, documented guard boundaries - not a scraped, fuzzed,
   or automatically generated set. Absence of a finding here is weak evidence;
