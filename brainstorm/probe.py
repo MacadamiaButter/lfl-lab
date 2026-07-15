@@ -19,17 +19,29 @@ except the one model endpoint it is pointed at.
 Usage:
     export LFL_BRAINSTORM_ENDPOINT=http://<your-model-host>:<port>   # required
     export LFL_BRAINSTORM_API_KEY="$(cat /path/to/your/api-key)"     # required if the endpoint needs one
-    python3 brainstorm/probe.py                 # --variant strict (default)
+    python3 brainstorm/probe.py                  # --variant shipped (default)
+    python3 brainstorm/probe.py --variant strict # historical builtin prompt
     python3 brainstorm/probe.py --variant naive  # stress-test variant, see below
 
 Two system-prompt variants are built in, on purpose, to make "results depend
 heavily on the system prompt" an observed comparison rather than an assumed
 caveat:
 
-  strict (default) - teaches the full verb list, spells out the index-address
-    ban with the reason, and explicitly tells the model to reach for
-    pause "..." whenever it would otherwise need to point at an element by
-    number or position.
+  shipped (default) - the drift-killer, added once the brainstorm lane
+    actually shipped in lfl-terminal (2026-07-15): the ENTIRE request payload
+    - system prompt, the JSON.stringify({goal}) user-message wire format,
+    the lfl_script_draft response_format json_schema, max_tokens,
+    temperature - is built by calling the REAL buildBrainstormPayload() from
+    the product's own service-worker.js via shipped_payload.js (see that
+    file's header). Nothing is copied into this repo, so this variant's
+    numbers are always about the exact bytes the extension puts on the
+    wire; a product prompt/format change is measured automatically on the
+    next run. Requires a sibling lfl-terminal checkout (or
+    LFL_TERMINAL_EXTENSION_DIR) and an endpoint that honors json_schema
+    structured output (llama.cpp does).
+  strict - this file's own historical copy of the prompt the product
+    originally ported (plain-text user turn, no json_schema). Kept for
+    comparability with the pre-ship runs recorded in BRAINSTORM-PROBE.md.
   naive - a much shorter prompt that lists step types (including click/select)
     without ever explaining why index-addressing is unsafe or nudging toward
     pause. Meant to surface real failures, not just report a clean 100%.
@@ -63,6 +75,7 @@ import requests
 HERE = Path(__file__).resolve().parent
 GOALS_PATH = HERE / "goals.json"
 VALIDATE_JS = HERE / "validate.js"
+SHIPPED_PAYLOAD_JS = HERE / "shipped_payload.js"
 RESULTS_DIR = HERE / "results"  # gitignored - see .gitignore
 
 REQUEST_TIMEOUT_S = 120
@@ -155,18 +168,10 @@ _session = requests.Session()
 _session.trust_env = False
 
 
-def call_model(endpoint, api_key, goal_text, system_prompt):
+def post_payload(endpoint, api_key, payload):
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    payload = {
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": goal_text},
-        ],
-        "temperature": 0.2,
-        "max_tokens": 700,
-    }
     resp = _session.post(
         f"{endpoint.rstrip('/')}/v1/chat/completions",
         headers=headers,
@@ -176,6 +181,50 @@ def call_model(endpoint, api_key, goal_text, system_prompt):
     resp.raise_for_status()
     data = resp.json()
     return data["choices"][0]["message"]["content"]
+
+
+def call_model(endpoint, api_key, goal_text, system_prompt):
+    payload = {
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": goal_text},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 700,
+    }
+    return post_payload(endpoint, api_key, payload)
+
+
+def build_shipped_payload(goal_text):
+    """Shells out to shipped_payload.js, which loads the REAL
+    service-worker.js and calls the REAL buildBrainstormPayload() - never
+    reimplemented here, same rule as validate_body() below. Raises
+    RuntimeError with the shim's own stderr hint if the product checkout is
+    missing."""
+    proc = subprocess.run(
+        ["node", str(SHIPPED_PAYLOAD_JS), goal_text],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"shipped_payload.js failed (exit {proc.returncode}): {proc.stderr.strip()}")
+    return json.loads(proc.stdout)
+
+
+def extract_shipped_script(raw_content):
+    """The shipped payload requests lfl_script_draft structured output, so
+    the model's content is a JSON document {"script": ..., "reason": ...} -
+    same parse the extension's own response path performs. Returns
+    (script_or_None, reason_if_invalid)."""
+    try:
+        doc = json.loads(raw_content)
+    except json.JSONDecodeError:
+        return None, "model content is not valid JSON - does the endpoint honor response_format json_schema?"
+    script = doc.get("script")
+    if not isinstance(script, str) or not script.strip():
+        return None, "model JSON has no usable 'script' string"
+    return script, None
 
 
 def validate_body(body):
@@ -201,16 +250,26 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--variant",
-        choices=sorted(SYSTEM_PROMPTS.keys()),
-        default="strict",
-        help="which system-prompt variant to probe with (default: strict)",
+        choices=["shipped"] + sorted(SYSTEM_PROMPTS.keys()),
+        default="shipped",
+        help="'shipped' probes the exact payload the product builds (default); "
+             "'strict'/'naive' are this file's own historical prompt variants",
     )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    system_prompt = SYSTEM_PROMPTS[args.variant]
+    shipped = args.variant == "shipped"
+    system_prompt = None if shipped else SYSTEM_PROMPTS[args.variant]
+    if shipped:
+        # Fail fast (and with the shim's own path hint) BEFORE spending any
+        # model calls if the product checkout is missing or renamed things.
+        try:
+            build_shipped_payload("probe preflight - not sent to any model")
+        except (RuntimeError, json.JSONDecodeError) as err:
+            print(f"shipped-variant preflight failed: {err}", file=sys.stderr)
+            sys.exit(1)
 
     endpoint = os.environ.get("LFL_BRAINSTORM_ENDPOINT")
     if not endpoint:
@@ -231,8 +290,11 @@ def main():
         goal_text = entry["goal"]
         print(f"[{i}/{len(goals)}] {goal_id} ...", file=sys.stderr)
         try:
-            raw_content = call_model(endpoint, api_key, goal_text, system_prompt)
-        except requests.RequestException as err:
+            if shipped:
+                raw_content = post_payload(endpoint, api_key, build_shipped_payload(goal_text))
+            else:
+                raw_content = call_model(endpoint, api_key, goal_text, system_prompt)
+        except (requests.RequestException, RuntimeError, json.JSONDecodeError) as err:
             results.append({
                 "id": goal_id,
                 "goal": goal_text,
@@ -242,7 +304,21 @@ def main():
             })
             continue
 
-        body = strip_code_fence(raw_content)
+        if shipped:
+            script, err_reason = extract_shipped_script(raw_content)
+            if script is None:
+                results.append({
+                    "id": goal_id,
+                    "goal": goal_text,
+                    "raw_body": raw_content,
+                    "valid": False,
+                    "reason": err_reason,
+                })
+                time.sleep(INTER_REQUEST_DELAY_S)
+                continue
+            body = strip_code_fence(script)
+        else:
+            body = strip_code_fence(raw_content)
         verdict = validate_body(body)
         results.append({
             "id": goal_id,
@@ -263,7 +339,14 @@ def main():
     out_path = RESULTS_DIR / f"run-{args.variant}-{ts}.json"
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(
-            {"variant": args.variant, "endpoint": endpoint, "n_goals": n, "n_valid": n_ok, "results": results},
+            {
+                "variant": args.variant,
+                "payload_source": "product buildBrainstormPayload() via shipped_payload.js" if shipped else "probe.py builtin prompt",
+                "endpoint": endpoint,
+                "n_goals": n,
+                "n_valid": n_ok,
+                "results": results,
+            },
             f,
             indent=2,
         )

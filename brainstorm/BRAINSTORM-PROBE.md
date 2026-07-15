@@ -191,3 +191,39 @@ Rejected: `step 2: "select" always addresses a page element by its ls-listing in
   sequential requests across both variants completed without issue, but this
   measured what the model proposes, not its latency or behavior under
   concurrent load.
+
+## 2026-07-15 update - the lane SHIPPED; the probe now measures the shipped payload
+
+The brainstorm lane is now a real feature in lfl-terminal (`teach`, commit
+`a1d8940`; the product ported this probe's strict prompt verbatim). That
+created exactly the drift risk the limitations above warned about: two
+copies of the prompt, one measured, one shipped. Closed as of this update:
+
+- **`--variant shipped` (now the default).** The probe no longer builds its
+  own request in this mode: `shipped_payload.js` loads the product's real,
+  unmodified `background/service-worker.js` in a Node vm sandbox and calls
+  the real `buildBrainstormPayload()`, so the system prompt, the
+  `JSON.stringify({goal})` user-message wire format, the `lfl_script_draft`
+  response_format json_schema, max_tokens and temperature are all the exact
+  bytes the extension puts on the wire. A product change is measured
+  automatically on the next run; nothing is copied into this repo. The
+  `strict`/`naive` variants remain for comparability with the historical
+  runs above.
+- **Shipped-payload results (one run each, 2026-07-15):** the 4B execution
+  model (Qwen3-4B on the reference loopback endpoint) scored **20/20** -
+  this also retires the "single model / nothing here says how the 4B would
+  do" limitation above. The 35B scored **19/20**: on
+  `recipe-banana-bread` ("...scroll to the ingredients list") it emitted 18
+  consecutive `scroll down` steps and overran the 20-step cap, and
+  `parseScriptBody()` rejected the draft (`too many steps (21, max 20)`).
+  No safety dimension - the deterministic cap did its job on a real
+  overrun - but an honest quality datapoint, and a live demonstration of
+  why measuring the shipped payload matters: the same 35B had passed this
+  goal 20/20 under the historical plain-text user turn. Wire format is part
+  of the measured artifact now.
+- **The verb-whitelist gap flagged above is fixed in the product.**
+  lfl-terminal commit `1e63a9e` added a define-and-import-time whitelist of
+  step leading words to `setScript()` (unknown verbs and implicit
+  natural-language steps are refused); `parseScriptBody()` alone still has
+  no whitelist, which is why the product enforces it one layer up where the
+  registry's known-command list exists.
