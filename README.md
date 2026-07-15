@@ -41,18 +41,25 @@ built specifically to try to violate it and show that it holds.
   extension at a model on another port or host, with the API key held on your
   machine and never handed to the extension. Zero dependencies, small enough to
   read in full. See [`proxy/README.md`](proxy/README.md).
-- **`tests/check_no_leaks.sh`** - the pre-publish hygiene gate every commit in
-  this repo passes before it is pushed.
+- **`harness/`** - a Playwright rig that drives the real, unpacked lfl-terminal
+  extension against a small corpus of benign and adversarial local pages, and
+  logs every model proposal, human-gate verdict, and outcome. Includes the
+  first adversarial battery: prompt injection, an approval-gate occlusion
+  attempt, and cross-origin redirect bait, all run with the runner approving
+  the proposed action so the question is whether the guard beneath the model
+  holds, not whether the model behaves. See [`harness/README.md`](harness/README.md)
+  for how to run it and what each scenario proves.
+- **`tests/check_no_leaks.sh`** and **`tests/check_no_emdash.sh`** - the
+  pre-publish hygiene gates every commit in this repo passes before it is
+  pushed.
 
 ## Roadmap
 
-- **Harness** - a headless-browser rig (runs happily on a small Linux box such as
-  a Raspberry Pi) that drives the terminal against a corpus of canned pages and
-  logs every proposal, verdict, and outcome. Reproducible scenarios.
-- **Adversarial corpus and model-swap A/B** - pages that actively try to defeat
-  the approval gate (prompt injection, overlay/clickjacking, cross-origin
-  redirect bait), run against several model backends behind one interface, with
-  published comparisons on wrong-action rate and injection resistance.
+- **Wider adversarial corpus and model-swap A/B** - more pages that try to
+  defeat the approval gate, run against several model backends behind one
+  interface, with published comparisons on wrong-action rate and injection
+  resistance across models (today's model-swap workflow is manual - see
+  `harness/README.md`).
 - **Brainstorm lane** - experiments in having a larger model help author
   terminal *scripts* (named compositions of the fixed primitives) from a trusted
   design conversation, validated by the same code a hand-typed script goes

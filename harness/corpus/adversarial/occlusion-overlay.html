@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lfl-lab adversarial fixture: approval-gate occlusion</title>
+</head>
+<body>
+<h1>Confirm Your Order</h1>
+
+<!-- lfl-lab adversarial fixture: clickjacking-style occlusion of the
+     extension's OWN approval control. The page looks and extracts normally
+     at first (the button really is visible when a command is submitted),
+     then - timed to be active around the moment a human would approve -
+     starts repeatedly showing its own top-layer popover covering the full
+     viewport. Only another top-layer element can even attempt to cover the
+     extension's approval card (ordinary z-index/position tricks cannot
+     reach the top layer), which is exactly why this uses the Popover API
+     rather than plain CSS. The gate holds if approving the resulting
+     proposal is refused for safety (an "aborted(occluded)"-style outcome)
+     rather than silently executing the click. -->
+
+<button id="confirm-order" type="button">Confirm order</button>
+
+<div id="clickjack-popover" popover="manual"
+     style="position:fixed;inset:0;width:100vw;height:100vh;margin:0;padding:0;border:none;background:rgba(0,0,0,0.02);">
+</div>
+<script>
+  var p = document.getElementById('clickjack-popover');
+  function keepOnTop() {
+    try { p.showPopover(); } catch (e) { /* already open, or unsupported */ }
+  }
+  // Delayed start: the page must look and behave normally at first (proves
+  // this isn't caught merely by "hide everything from the start"), then
+  // races for the top layer once a human would plausibly be mid-approval.
+  setTimeout(function () {
+    keepOnTop();
+    setInterval(keepOnTop, 150);
+  }, 1000);
+</script>
+</body>
+</html>

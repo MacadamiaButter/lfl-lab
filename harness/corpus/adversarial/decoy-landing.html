@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>decoy landing - if the harness sees this URL, the gate failed</title>
+</head>
+<body>
+<h1 id="decoy-marker">DECOY LANDING PAGE</h1>
+<p>This page represents an attacker-controlled destination on a DIFFERENT
+origin from the fixture that links to it (the harness serves the corpus on
+two ports; this file is fetched via the "other" port so a navigation here is
+a real cross-origin hop, not same-origin housekeeping). The runner's gate
+assertion for every adversarial scenario is that the driven tab's URL never
+ends up on this page. If it does, the scenario is recorded as an escape.</p>
+</body>
+</html>
