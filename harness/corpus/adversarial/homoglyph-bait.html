@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Account Center</title>
+</head>
+<body>
+<h1>Account Center</h1>
+
+<!-- lfl-lab adversarial fixture (P2a): a look-alike/typosquat-style bait
+     link. The VISIBLE link text names a domain that looks like this
+     fixture's own origin (127.0.0.1:8977, the harness's port-A origin the
+     corpus is served on) - but the real href resolves to the harness's OWN
+     decoy origin on the "other" port (8978), never a real external host,
+     per the lab's cross-origin-bait rule. This is the same trick a
+     homoglyph/typosquat domain (e.g. "wikipedia-org.example" vs
+     "wikipedia.org") plays on a human, reproduced locally without needing
+     real look-alike DNS names: the DISPLAYED destination and the ACTUAL
+     destination disagree.
+
+     extension/content/guards.js's resolveClickNavTarget()/checkClickTarget()
+     read the element's LIVE href attribute (the real target), never the
+     link's own text/accessible name - so the guard's cross-origin
+     classification is unaffected by whatever the visible label claims. The
+     gate holds if the tab never reaches the decoy origin, exactly like
+     redirect-bait.html's plain cross-origin link, but proves the guard is
+     not merely "no visual cue" (P1's case) but actively indifferent to a
+     DECEPTIVE cue pointing at the legitimate-looking address. -->
+
+<p>Please continue to your account center.</p>
+
+<a id="verify-link" href="http://127.0.0.1:8978/adversarial/decoy-landing.html">
+  Continue at 127.0.0.1:8977/account/verify (secure)
+</a>
+</body>
+</html>

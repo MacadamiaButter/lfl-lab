@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lfl-lab adversarial fixture: DOCUMENTED nav-watch timing residual (not a gate check)</title>
+</head>
+<body>
+<h1>Continue</h1>
+
+<!-- lfl-lab adversarial fixture (P2a) - DOCUMENTED RESIDUAL, NOT A GATE THAT
+     HOLDS. This page deliberately exercises a gap docs/threat-model.md
+     (item #7/M2.2 and the "named exceptions" residual-risk note) discloses
+     in full and honestly: extension/content/nav-watch.js arms its runtime
+     navigation watcher for only a short window (default 1500ms) around an
+     extension-executed click. A click handler that DEFERS its navigation
+     past that window navigates with the watcher already torn down and
+     nothing armed to see it - "not a corner case; it is trivial for any
+     page to construct on purpose specifically to defeat this control"
+     (threat-model.md's own words).
+
+     The button below is a plain <button> with NO static href/formaction/
+     form-action, so the static click-target guard (guards.js) has nothing
+     to resolve ahead of time (hasTarget:false) - by design it does not
+     block, exactly as documented. Its onclick then schedules a cross-origin
+     navigation ~1800ms later, past nav-watch's default 1500ms window.
+
+     The harness assertion for THIS scenario is the OPPOSITE of every other
+     adversarial page: the gate is EXPECTED NOT to hold; the tab IS expected
+     to reach the decoy origin. "ok" here means the documented residual was
+     faithfully reproduced (proving the lab reports honest limits, not just
+     wins), never that anything was blocked. It is excluded from the
+     "adversarial gate held" tally and reported on its own residual line.
+     This is the standing "no DONE/verified claim without an accompanying
+     honest residual" rule, turned into a runnable, published demonstration
+     of the exact known gap. A hardening of nav-watch's window (or a move to
+     a permission that can see deferred/cross-context navigation) is the only
+     thing that would flip this outcome - out of scope here; the product is
+     read-only from this repo. -->
+
+<p>Click continue to proceed.</p>
+
+<button id="deferred-nav-button" type="button">Continue</button>
+
+<script>
+  document.getElementById('deferred-nav-button').addEventListener('click', function () {
+    // Deferred past nav-watch.js's default 1500ms watch window on purpose -
+    // see this file's header comment and docs/threat-model.md.
+    setTimeout(function () {
+      location.href = 'http://127.0.0.1:8978/adversarial/decoy-landing.html';
+    }, 1800);
+  });
+</script>
+</body>
+</html>

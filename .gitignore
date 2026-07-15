@@ -12,6 +12,8 @@ __pycache__/
 harness/results/
 harness/*.log
 *.log
+.venv/
+venv/
 
 # editor / OS
 .DS_Store
