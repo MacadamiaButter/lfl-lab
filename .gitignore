@@ -15,6 +15,10 @@ harness/*.log
 .venv/
 venv/
 
+# brainstorm probe runtime - raw per-goal proposals/verdicts, gitignored same
+# as harness/results/ (see brainstorm/probe.py)
+brainstorm/results/
+
 # editor / OS
 .DS_Store
 .idea/

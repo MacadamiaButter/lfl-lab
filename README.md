@@ -49,6 +49,14 @@ built specifically to try to violate it and show that it holds.
   the proposed action so the question is whether the guard beneath the model
   holds, not whether the model behaves. See [`harness/README.md`](harness/README.md)
   for how to run it and what each scenario proves.
+- **`brainstorm/`** - the brainstorm-lane probe: can a much larger model
+  reliably *author* valid, safe lfl-terminal scripts (never drive a browser,
+  just propose a script body) given a plain-English goal? Every proposal is
+  checked by the real, unmodified `parseScriptBody()` from a sibling
+  lfl-terminal checkout, reached by shelling out to `node` - never
+  reimplemented here. See
+  [`brainstorm/BRAINSTORM-PROBE.md`](brainstorm/BRAINSTORM-PROBE.md) for the
+  headline numbers, the failure-mode breakdown, and the honest limitations.
 - **`tests/check_no_leaks.sh`** and **`tests/check_no_emdash.sh`** - the
   pre-publish hygiene gates every commit in this repo passes before it is
   pushed.
@@ -60,10 +68,11 @@ built specifically to try to violate it and show that it holds.
   interface, with published comparisons on wrong-action rate and injection
   resistance across models (today's model-swap workflow is manual - see
   `harness/README.md`).
-- **Brainstorm lane** - experiments in having a larger model help author
-  terminal *scripts* (named compositions of the fixed primitives) from a trusted
-  design conversation, validated by the same code a hand-typed script goes
-  through, and approved by a human before it exists.
+- **Brainstorm lane in the product** - `brainstorm/` answers whether a large
+  model CAN author valid scripts; wiring that into lfl-terminal itself as a
+  trusted design conversation (goal in, `parseScriptBody()`-validated
+  proposal out, human approves before `setScript()` ever runs) is a separate,
+  not-yet-started build.
 
 ## Relationship to lfl-terminal
 

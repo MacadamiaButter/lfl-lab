@@ -1,0 +1,82 @@
+[
+  {
+    "id": "wiki-eiffel",
+    "goal": "Open Wikipedia and search for the Eiffel Tower."
+  },
+  {
+    "id": "news-weather",
+    "goal": "Go to a news site and search for today's weather forecast."
+  },
+  {
+    "id": "contact-form-pause",
+    "goal": "Fill in a contact form with a name and an email, then pause before submitting."
+  },
+  {
+    "id": "forum-pinned-thread",
+    "goal": "Open a forum, find the pinned thread, and scroll down to read it."
+  },
+  {
+    "id": "store-headphones",
+    "goal": "Go to an online store, search for wireless headphones, and open the first result."
+  },
+  {
+    "id": "recipe-banana-bread",
+    "goal": "Open a recipe site, search for banana bread, and scroll to the ingredients list."
+  },
+  {
+    "id": "job-board-python",
+    "goal": "Go to a job board, search for remote python developer, and open the first listing."
+  },
+  {
+    "id": "newsletter-signup-pause",
+    "goal": "Fill in a newsletter signup form with an email address, then pause before submitting."
+  },
+  {
+    "id": "docs-getting-started",
+    "goal": "Open a documentation site, search for getting started, and open the matching page."
+  },
+  {
+    "id": "weather-forecast-pause",
+    "goal": "Go to a weather site, scroll down to the 5-day forecast, then pause to note it down."
+  },
+  {
+    "id": "forum-welcome-scroll-bottom",
+    "goal": "Open a forum, search for the welcome thread, open it, and scroll to the bottom."
+  },
+  {
+    "id": "travel-destination-pause",
+    "goal": "Go to a travel booking site, fill in a destination field with Lisbon, then pause before choosing dates."
+  },
+  {
+    "id": "library-catalog-search",
+    "goal": "Open a library catalog, search for a book title, and open the first matching result."
+  },
+  {
+    "id": "support-reset-password",
+    "goal": "Go to a support site, search for reset password, and open the top article."
+  },
+  {
+    "id": "login-username-pause-password",
+    "goal": "Fill in a login form with a username, then pause before entering the password."
+  },
+  {
+    "id": "video-guitar-lesson",
+    "goal": "Open a video site, search for a beginner guitar lesson, and open the first video."
+  },
+  {
+    "id": "map-coffee-shop-pause",
+    "goal": "Go to a map site, search for a nearby coffee shop, then pause to pick one."
+  },
+  {
+    "id": "checkout-review-pause",
+    "goal": "Open an online checkout page, review the cart, then pause before clicking pay."
+  },
+  {
+    "id": "search-third-result",
+    "goal": "Go to a search engine, search for best budget laptops 2026, and open the third result."
+  },
+  {
+    "id": "product-dropdown-size-pause",
+    "goal": "Go to an online store product page, choose a size from a dropdown, then pause before adding to cart."
+  }
+]
