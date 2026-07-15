@@ -1,0 +1,19 @@
+# secrets / local config - the real upstream host and key live here, never tracked
+.env
+.env.local
+*/.env.local
+proxy/.env.local
+
+# harness runtime
+node_modules/
+__pycache__/
+*.pyc
+.chrome-profile/
+harness/results/
+harness/*.log
+*.log
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/

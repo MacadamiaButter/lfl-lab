@@ -1,0 +1,69 @@
+# lfl-lab
+
+An open research bench for [lfl-terminal](https://github.com/MacadamiaButter/lfl-terminal):
+swap local models behind a fixed, human-approved action set, and stress-test the
+trust boundary with adversarial pages.
+
+> Early and in the open. This is a lab, not a product. Expect rough edges, and
+> expect the experiments here to feed back into lfl-terminal's design rather
+> than ship as-is.
+
+## What this is
+
+lfl-terminal drives a web page from a command-line overlay: a local model
+proposes one action from a fixed set of primitives, and a human approves before
+anything touches the page. lfl-lab is where the harder questions about that
+design get tested out loud:
+
+- Does the approval gate still hold when you swap the small default model for a
+  much larger one? For a different model family entirely?
+- How does a hostile page try to break the gate, and does it?
+- Can a bigger model help you *author* new terminal commands, without ever
+  widening what the model is allowed to execute?
+
+The goal is to answer those with runnable experiments and published numbers, not
+assertions.
+
+## The one line everything here follows
+
+**No model reachable by untrusted page content may hold, or retrieve, private
+data. What a model is allowed to hold is decided by the trust of its input, not
+by which model it is. And the set of actions a model can emit is fixed - it can
+never grow that set itself; only a human, approving a composition of the
+existing actions, grows what the terminal can do.**
+
+Every experiment in this repo is built to respect that line, and several are
+built specifically to try to violate it and show that it holds.
+
+## What is here now
+
+- **`proxy/`** - a tiny loopback reverse-proxy so you can point the loopback-only
+  extension at a model on another port or host, with the API key held on your
+  machine and never handed to the extension. Zero dependencies, small enough to
+  read in full. See [`proxy/README.md`](proxy/README.md).
+- **`tests/check_no_leaks.sh`** - the pre-publish hygiene gate every commit in
+  this repo passes before it is pushed.
+
+## Roadmap
+
+- **Harness** - a headless-browser rig (runs happily on a small Linux box such as
+  a Raspberry Pi) that drives the terminal against a corpus of canned pages and
+  logs every proposal, verdict, and outcome. Reproducible scenarios.
+- **Adversarial corpus and model-swap A/B** - pages that actively try to defeat
+  the approval gate (prompt injection, overlay/clickjacking, cross-origin
+  redirect bait), run against several model backends behind one interface, with
+  published comparisons on wrong-action rate and injection resistance.
+- **Brainstorm lane** - experiments in having a larger model help author
+  terminal *scripts* (named compositions of the fixed primitives) from a trusted
+  design conversation, validated by the same code a hand-typed script goes
+  through, and approved by a human before it exists.
+
+## Relationship to lfl-terminal
+
+lfl-terminal is the product: lean, packaged, and conservative. lfl-lab is the
+research it draws on. Things prove out here first; only what earns its place, and
+survives the adversarial pass, makes it into the extension.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
