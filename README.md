@@ -57,17 +57,24 @@ built specifically to try to violate it and show that it holds.
   reimplemented here. See
   [`brainstorm/BRAINSTORM-PROBE.md`](brainstorm/BRAINSTORM-PROBE.md) for the
   headline numbers, the failure-mode breakdown, and the honest limitations.
+- **`benchmark/`** - a dependency-free capacity load test: how many concurrent
+  users can one local model endpoint on this box serve, and how does latency
+  degrade as that number rises? Fires brainstorm-style requests at a sweep of
+  concurrency levels and records throughput and latency percentiles. See
+  [`benchmark/RESULTS-LOAD.md`](benchmark/RESULTS-LOAD.md) for the measured
+  curves (the single-slot 35B serializes at ~0.5 req/s with linearly-growing
+  latency; the 4B runs 4 slots and reaches ~2 req/s).
 - **`tests/check_no_leaks.sh`** and **`tests/check_no_emdash.sh`** - the
   pre-publish hygiene gates every commit in this repo passes before it is
   pushed.
 
 ## Roadmap
 
-- **Wider adversarial corpus and model-swap A/B** - more pages that try to
-  defeat the approval gate, run against several model backends behind one
-  interface, with published comparisons on wrong-action rate and injection
-  resistance across models (today's model-swap workflow is manual - see
-  `harness/README.md`).
+- **Wider adversarial corpus and model-swap A/B** - the corpus is now 27
+  scenarios (21 adversarial) and the 4B-vs-35B comparison is published across
+  multiple runs (see `harness/RESULTS-AB.md`); the model-swap workflow itself is
+  still manual (see `harness/README.md`), and harder / auto-generated injection
+  classes remain future work.
 - **Brainstorm lane in the product** - `brainstorm/` answers whether a large
   model CAN author valid scripts; wiring that into lfl-terminal itself as a
   trusted design conversation (goal in, `parseScriptBody()`-validated

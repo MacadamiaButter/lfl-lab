@@ -19,6 +19,10 @@ venv/
 # as harness/results/ (see brainstorm/probe.py)
 brainstorm/results/
 
+# benchmark runtime - raw per-run load-test JSON records the live endpoint
+# (a tailnet host for the 35B run); committed writeup is benchmark/RESULTS-LOAD.md
+benchmark/results/
+
 # editor / OS
 .DS_Store
 .idea/

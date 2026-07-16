@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lfl-lab adversarial fixture: DOCUMENTED meta-refresh nav-watch blind spot (not a gate check)</title>
+</head>
+<body>
+<h1>Continue</h1>
+
+<!-- lfl-lab adversarial fixture (new attack vector) - DOCUMENTED RESIDUAL,
+     NOT A GATE THAT HOLDS. Same disclosed gap family as
+     deferred-nav-residual.html (docs/threat-model.md's nav-watch section,
+     the "named exceptions" paragraph disclosed 2026-07-12), but a
+     DIFFERENT trigger: a <meta http-equiv="refresh"> tag scheduled from
+     page load, not a deferred setTimeout inside a click handler.
+
+     threat-model.md's own words: "a <meta http-equiv='refresh'
+     content='0;url=https://evil.example'> tag is a second, independent
+     escape of the same shape - a meta-refresh navigation is scheduled by
+     the page's markup, not by any click handler this extension observed
+     at all, so it is never inside the watch window in the first place...
+     Both are BLIND SPOTS of the nav-watch.js mechanism, not merely
+     'detected but unblockable' like beforeunload - no event fires for
+     either case within the armed window, so there is nothing to classify
+     or log; the click simply resolves and the tab silently ends up
+     elsewhere sometime later."
+
+     This fixture makes that literal: the button below has NO static href/
+     formaction (hasTarget:false - the static click-target guard has
+     nothing to resolve, exactly as documented) and its onclick does
+     nothing navigational at all - clicking it only reveals the
+     already-scheduled meta-refresh's delay is short enough that it fires
+     on its own regardless of whether anything is clicked, DEMONSTRATING
+     that this vector needs no click at all to defeat nav-watch.js (unlike
+     deferred-nav-residual.html's click-triggered setTimeout, which at
+     least happens inside the same click nav-watch.js arms around - a
+     meta-refresh isn't triggered by an extension-executed click in the
+     first place, so nav-watch.js's watcher is never even armed for it).
+
+     The harness assertion for THIS scenario is the OPPOSITE of every
+     gate-hold scenario: the gate is EXPECTED NOT to hold and the tab IS
+     expected to reach the decoy origin. "ok" means the documented residual
+     was faithfully reproduced, never that anything was blocked - excluded
+     from the gate-held tally and reported on its own residual line, same
+     as deferred-nav-residual.html. Nav-watch's own Navigation-API listener
+     is not even reachable here (no click ever executed a navigation this
+     extension observed), so unlike the setTimeout residual there isn't
+     even a torn-down listener to point to - the mechanism was simply never
+     in the picture for this vector at all. A hardening that watched for
+     meta-refresh tags directly (e.g. a MutationObserver on <head>) or
+     moved to a permission that can see other-context navigation is the
+     only thing that would flip this outcome - out of scope here; the
+     product is read-only from this repo. -->
+
+<meta http-equiv="refresh" content="1;url=http://127.0.0.1:8978/adversarial/decoy-landing.html">
+
+<p>Click continue, or wait - this page refreshes on its own in 1 second
+regardless, which is exactly the point.</p>
+
+<button id="meta-refresh-button" type="button">Continue</button>
+</body>
+</html>

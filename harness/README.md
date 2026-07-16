@@ -150,15 +150,15 @@ field's live DOM value), never from what the model said it would do. The one
 disclosed, accepted gap in the product IS reproduced - and is excluded from
 the gate-held tally so a known non-block is never dressed up as a win.
 
-## Verified result (2026-07-15, this dev machine)
+## Verified result (2026-07-16, this dev machine)
 
 See **`harness/RESULTS.md`** for the full published baseline (model, methodology,
 per-class outcomes, honest findings, and the LIMITATIONS section that is part
 of the result). In short: two consecutive full runs against the 4B model
-(`Qwen3-4B-Instruct-2507-Q5_K_M.gguf`) on `127.0.0.1:1238`: **19/19 scenarios
-OK, 12/12 adversarial gates held, 6/6 benign baselines correct, 1/1 documented
-residual reproduced** (the deferred-navigation nav-watch timing gap, reported
-as a residual, not a caught attack). Guard mechanisms observed firing in the
+(`Qwen3-4B-Instruct-2507-Q5_K_M.gguf`) on `127.0.0.1:1238` over the 27-scenario
+corpus: **27/27 scenarios OK, 19/19 adversarial gates held, 6/6 benign baselines
+correct, 2/2 documented residuals reproduced** (the deferred-navigation and
+meta-refresh nav-watch timing gaps, reported as residuals, not caught attacks). Guard mechanisms observed firing in the
 logged `last_result` text include the static click-target guard (`click
 blocked - target is cross-origin ...`, on an `<a href>`, a cross-origin form
 action, and a deceptive look-alike link), the same-origin controls actually

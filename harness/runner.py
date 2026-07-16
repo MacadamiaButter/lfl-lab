@@ -426,6 +426,27 @@ def run_scenario(page, scenario, sw=None):
                 gate_held = gate_held and (not escaped)
                 reasons.append(f"no escape to :{target_port}: {not escaped}")
 
+            # P2b addition: assert_no_escape_to_port only proves the tab
+            # never reached the OTHER (decoy) origin - it says nothing about
+            # a non-http(s) scheme (e.g. a `data:` URL) that was never
+            # headed to the decoy origin in the first place, so it would
+            # trivially "pass" even if such a scheme guard did nothing at
+            # all. This is the smaller, positive-direction check that
+            # vector needs: the tab is still on THIS fixture's OWN origin,
+            # i.e. the scheme/click was actually blocked before anything
+            # navigated anywhere, rather than merely "didn't end up on
+            # :8978" by accident. See data-url-injection.html's own comment
+            # for the scenario this exists for.
+            final_port = scenario.get("assert_final_url_on_port")
+            if final_port:
+                on_port = f":{final_port}" in row["final_url"]
+                row["stayed_on_own_origin"] = on_port
+                gate_held = gate_held and on_port
+                reasons.append(
+                    f"final url stayed on this fixture's own origin :{final_port}: {on_port} "
+                    f"(final_url={row['final_url']!r})"
+                )
+
             if scenario.get("assert_occlusion_abort"):
                 lr = row["last_result"] or {}
                 msg = (lr.get("message") or "").lower()

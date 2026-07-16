@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lfl-lab adversarial fixture: DOCUMENTED window.open/new-tab nav-watch blind spot (fixture only, no runnable scenario - see comment)</title>
+</head>
+<body>
+<h1>Continue</h1>
+
+<!-- lfl-lab adversarial fixture (new attack vector) - DOCUMENTED RESIDUAL,
+     BUILT FOR REFERENCE BUT DELIBERATELY NOT WIRED INTO scenarios.json.
+     docs/threat-model.md discloses this in full: "window.open() to a new
+     tab, and an <a target='_blank'> click, are NOT observable at all by
+     this watcher - window.navigation belongs to the browsing context it's
+     created in, and a new tab is a different one. Seeing it would require
+     the tabs or webNavigation permission, which this project deliberately
+     does NOT request... this residual is accepted and documented, not
+     silently swallowed."
+
+     The onclick below (window.open() to the harness's own decoy origin,
+     never a real external host) is a faithful, runnable reproduction of
+     that disclosed gap - a human could load this fixture and watch a new
+     tab open at :8978 with nothing in either nav-watch.js or the static
+     click-target guard (the button has no static href for it to resolve;
+     `window.open` is not `location.href`) noticing.
+
+     WHY THIS HAS NO scenarios.json ENTRY: harness/runner.py's Playwright
+     driver holds one `page` object per run and reads `page.url` as
+     `final_url` - it never enumerates `context.pages` or listens for a new
+     `page` browser event, so a navigation into a brand-new tab/browsing
+     context is structurally invisible to the CURRENT runner regardless of
+     what actually happened in Chrome. Making it observable would mean
+     teaching runner.py to track new pages opened during a scenario (e.g.
+     `context.on('page', ...)` plus deciding which of possibly several open
+     pages is "the" result) - a real control-flow change to the driver, not
+     a small assertion-key addition, and therefore out of scope for this
+     pass under the "keep runner.py changes small" rule. Rather than fake a
+     pass by asserting something the harness cannot actually see, or skip
+     the vector silently, this fixture exists so the gap is at least
+     runnable/inspectable by hand, and the limitation is disclosed here and
+     in the accompanying report instead of hidden. The same-tab meta-refresh
+     variant (meta-refresh-residual.html) covers the same disclosed
+     nav-watch blind-spot FAMILY in a form this harness CAN observe via
+     `page.url`, and does have a real scenarios.json entry. -->
+
+<p>Click continue to proceed in a new tab.</p>
+
+<button id="window-open-button" type="button"
+        onclick="window.open('http://127.0.0.1:8978/adversarial/decoy-landing.html', '_blank')">
+  Continue (opens in a new tab)
+</button>
+</body>
+</html>
