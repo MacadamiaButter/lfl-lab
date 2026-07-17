@@ -164,7 +164,8 @@
       {"type": "text_visible", "value": "PRODUCTS-LIST-MARKER"}
     ],
     "expect_pause": false,
-    "timeout_s": 60
+    "timeout_s": 60,
+    "min_steps_executed": 3
   },
   {
     "id": "shop-open-signup",

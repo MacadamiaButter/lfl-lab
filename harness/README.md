@@ -79,6 +79,8 @@ harness/
   tasks/
     task-scenarios.json   task-success goals (fixture + realsite tiers) -
                           see "Task-success bench" below
+    resolve_go.js         go-step pre-classification shim - see
+                          "go-step pre-classification" below
   runner.py          the driver (see header docstring for full detail)
   author_tasks.py    task-success bench Phase A (AUTHOR) - see below
   task_runner.py     task-success bench Phase B (EXECUTE) - see below
@@ -286,15 +288,57 @@ see RESULTS-TASKS.md).
 
 **Scoring buckets** (design doc section 6, mutually exclusive per goal):
 `invalid_author` (no validator-passing script), `wrong_plan` (ran to the
-right terminal state, success checks failed), `halted` (a step no-match /
-arrival-halt / product error, or this harness's own nav-confirm safety
-policy - see below), `fell_to_model` (the script needed the model lane -
-either an explicit `ask`/click-etc proposal, or a `go` destination that
-needed the extension's nav-lane model fallback - Phase B always rejects
+right terminal state, success checks failed - including a `min_steps_executed`
+floor miss, see below), `halted` (a step no-match / arrival-halt / product
+error, or this harness's own nav-confirm safety policy - see below),
+`fell_to_model` (the script needed the model lane - either an explicit
+`ask`/click-etc proposal, or a `go` destination that needed the extension's
+nav-lane model fallback, INCLUDING the case where the fallback model
+declined to navigate and the run halted on that step - see
+"go-step pre-classification" below - Phase B always rejects/reclassifies
 these to stay execution-model-independent, design doc section 9 sign-off
-E), `pause_unexpected`, `timeout`, `harness_error`. `task_success` = the
-first valid script reaches `completed` (or `paused`, for `expect_pause`
-goals) AND every success check passes.
+E), `pause_unexpected`, `timeout`, `harness_error` (excluded from the
+`task_success` rate's denominator per design section 6, counted
+separately - see the run's own printed summary and `n_total`/`n_rated`/
+`n_harness_error` in the results JSON). `task_success` = `n_success/n_rated`,
+where a row counts as success when the first valid script reaches
+`completed` (or `paused`, for `expect_pause` goals), every success check
+passes, AND (if the scenario declares one) `steps_executed` meets its
+`min_steps_executed` floor.
+
+**`min_steps_executed` (optional per-scenario field, `task-scenarios.json`).**
+Success checks are end-state-only, which makes a path-dependent goal
+gameable: a degenerate script can reach the right final page/DOM state by a
+shortcut the goal text never asked for (see `harness/RESULTS-TASKS.md`'s
+LIMITATIONS for a live example on `shop-open-item-back-to-products`). If a
+scenario sets `"min_steps_executed": <int>`, `task_runner.py` enforces it at
+scoring time: an otherwise-passing row whose `steps_executed` is below that
+floor is demoted to `success=false, bucket="wrong_plan"`, with a
+`{"type": "min_steps_executed", ...}` entry appended to `checks` recording
+the floor and the observed count. This is a floor, not a real path-shape
+check, and is subject to the same `steps_executed` undercounting the
+LIMITATIONS section already documents (a script that DID take enough steps
+can still under-report `steps_executed` due to the `lastResult` reset on
+navigation) - set the floor conservatively for that reason.
+
+**go-step pre-classification (`harness/tasks/resolve_go.js`).** Before each
+run, `task_runner.py` shells out to `resolve_go.js` - a thin shim that
+`require()`s the REAL, unmodified `nav.js` from the sibling `lfl-terminal`
+checkout and calls its real `resolveGoLadder()`, same zero-reimplementation
+rule `validate.js`/`shipped_payload.js` already apply to `registry.js`/
+`service-worker.js` (see that file's own header) - for every `go <arg>` step
+in the script body. `resolveGoLadder()` returns `needsNavLane: true` for any
+non-empty argument that isn't a literal URL/domain (or a defined alias),
+which means the extension's `_handleGo()` MUST make a real nav-lane model
+call to resolve it - and if that model call then declines to navigate, the
+run halts with a message that is the MODEL'S OWN stated reason, not a fixed
+string, even though nothing ever surfaces as a `pendingNav` card. A genuine
+product-side `halted` outcome (i.e. not this harness's own nav-confirm
+allowlist rejection, see below) whose failing step is one of these is
+therefore reclassified `fell_to_model`, never by matching the model's
+message text - see `harness/RESULTS-TASKS.md`'s "Correction" section for the
+misattribution this fixes and the real evidence (the same script text
+producing differently-worded abort messages across runs).
 
 **Build-time deviation from the design doc, flagged here on purpose:** the
 design doc's section 4 watch loop says an approval-gated `pendingNav` card
@@ -306,8 +350,10 @@ would make Chrome open a REAL, DIRECT (not Tor-proxied) connection to an
 arbitrary invented host during what the design calls a self-contained
 fixture-tier run. `task_runner.py` therefore only auto-approves a
 `pendingNav` whose origin is on a fixed per-tier allowlist (fixture: the
-local corpus origin only; realsite: `*.wikipedia.org` only) and Escapes
-(rejects) anything else, bucketed `halted` with an explicit
+local corpus origin only; realsite: `https://*.wikipedia.org` /
+`https://wikipedia.org` only, scheme pinned - a bare suffix match without
+the scheme check would also approve a plaintext-http Wikipedia origin) and
+Escapes (rejects) anything else, bucketed `halted` with an explicit
 "harness safety policy, not a product-side halt" note in the evidence so it
 is never confused with a genuine product-side rejection. A `pendingNav`
 with `modelResolved: true` (the extension's own nav-lane model fallback,
@@ -320,7 +366,13 @@ model-independence reason `ask`-style `pendingProposal`s already are.
 the hand-typed `teach ... -> save` UI flow - the wire-payload equivalence is
 proven (`shipped_payload.js` calls the real `buildBrainstormPayload()`), the
 UI save path itself is a manual smoke, not an automated one (design doc
-section 3's disclosed mitigation).
+section 3's disclosed mitigation). The shipped payload pins
+`temperature: 0.1` (`service-worker.js`'s `TEMPERATURE` constant, read
+unmodified) - the design doc's own section 6 text says "temperature 0.2",
+which was inherited from `brainstorm/probe.py`'s own `strict`/`naive`
+variant prompt (unrelated to the product, predates the shipped payload
+existing); `author_tasks.py` only ever uses the `shipped` variant, so every
+number this bench reports is at the product's real, pinned `0.1`.
 
 ## Honesty notes for whoever verifies this next
 

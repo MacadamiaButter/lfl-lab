@@ -191,8 +191,20 @@ def main():
         results[goal_id] = {"attempts": attempts, "first_valid_body": first_valid}
 
     n = len(results)
-    n_valid = sum(1 for r in results.values() if r["first_valid_body"] is not None)
-    print(f"\n{n_valid}/{n} goals produced a validator-passing script on attempt 1 or 2.", file=sys.stderr)
+    # FIX 4b (verify-pass correction): design doc section 6's authored_valid
+    # metric is explicitly "a goal counts valid if attempt 1 is valid -
+    # attempt 2 is recorded for stability info only, keeping the headline
+    # comparable to the shipped probe method" - the pre-fix code only ever
+    # computed the "any of the 2 attempts" number and called it n_valid,
+    # which is a DIFFERENT (and always-greater-or-equal) quantity than the
+    # design's own headline. Report both, named unambiguously.
+    n_valid_attempt1 = sum(1 for r in results.values() if r["attempts"] and r["attempts"][0]["valid"])
+    n_valid_any_attempt = sum(1 for r in results.values() if r["first_valid_body"] is not None)
+    print(
+        f"\n{n_valid_attempt1}/{n} goals produced a validator-passing script on attempt 1 "
+        f"(headline, design doc section 6); {n_valid_any_attempt}/{n} on attempt 1 or 2 (any-attempt, stability info only).",
+        file=sys.stderr,
+    )
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -207,7 +219,8 @@ def main():
                 "model_tag": model_tag,
                 "attempts_per_goal": ATTEMPTS_PER_GOAL,
                 "n_goals": n,
-                "n_valid": n_valid,
+                "n_valid_attempt1": n_valid_attempt1,
+                "n_valid_any_attempt": n_valid_any_attempt,
                 "goals": results,
             },
             f,
