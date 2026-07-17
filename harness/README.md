@@ -71,10 +71,20 @@ harness/
                      injection, and one DOCUMENTED-residual page (a deferred
                      nav past nav-watch's window - reproduced honestly, not
                      "blocked")
+    tasks/           the task-success bench's own self-contained mini-site:
+                     shop.html -> products.html -> item-*.html (4 items) +
+                     search-results.html + signup.html - see "Task-success
+                     bench" below
   scenarios.json     the scenario list: page, command, and what "held" means
+  tasks/
+    task-scenarios.json   task-success goals (fixture + realsite tiers) -
+                          see "Task-success bench" below
   runner.py          the driver (see header docstring for full detail)
+  author_tasks.py    task-success bench Phase A (AUTHOR) - see below
+  task_runner.py     task-success bench Phase B (EXECUTE) - see below
   RESULTS.md         the published baseline (model, methodology, per-class
                      outcomes, honest findings, LIMITATIONS)
+  RESULTS-TASKS.md   the task-success bench's own results/LIMITATIONS
   results/           gitignored - runtime artifacts, one timestamped JSON
                      per run, never committed
 ```
@@ -211,6 +221,106 @@ things to know before running it on a Pi-class box:
   compute GPU - it can drive the browser, but `LFL_MODEL_ENDPOINT` must
   point at a model running elsewhere (the harness is the driver, never the
   model).
+
+## Task-success bench (does an authored script actually accomplish the goal)
+
+Everything above measures *validity* (does an authored script pass the real
+validator?) or *safety* (does the deterministic guard hold?). It never
+measures *usefulness*. The task-success bench closes that gap: **goal ->
+authored script -> real execution -> observed outcome**, as a rate, per
+model, with honest failure attribution. Full design doc:
+`LFL-LAB-TASK-SUCCESS-BENCH-DESIGN.md` (2026-07-17, approved, kept outside
+this repo with the operator's other planning docs); published numbers and
+LIMITATIONS live in `harness/RESULTS-TASKS.md`.
+
+`harness/author_tasks.py` imports `brainstorm/probe.py` directly, so it
+additionally needs the `requests` library in the same environment as
+`harness/requirements.txt` (`pip install requests` - a pre-existing gap:
+`brainstorm/probe.py` itself has needed `requests` since it was added and
+it was never folded into `harness/requirements.txt`, noted here rather than
+carried silently). `harness/task_runner.py` needs nothing beyond what
+`harness/requirements.txt` already installs (Playwright).
+
+Two model-independent-execution phases, run separately on purpose (clean
+failure attribution - authoring failure vs plan-wrong vs execution-halt vs
+page-mismatch stay separately visible, instead of conflated the way a
+full `teach -> save -> run` round trip inside the extension would leave
+them):
+
+**Phase A - AUTHOR** (`harness/author_tasks.py`, no browser): for each goal
+in `harness/tasks/task-scenarios.json`, makes 2 authoring attempts against
+`LFL_BRAINSTORM_ENDPOINT` using the exact shipped wire payload
+(`brainstorm/shipped_payload.js`/`brainstorm/probe.py`, imported not
+reimplemented - see those files' own headers), validates each attempt
+through the real `parseScriptBody()` (`brainstorm/validate.js`), and writes
+`harness/results/authored-<modeltag>-<utcts>.json` keyed by goal id.
+
+```
+export LFL_BRAINSTORM_ENDPOINT=http://127.0.0.1:1241   # 4B, keyless, local
+python3 harness/author_tasks.py --tier fixture
+```
+
+**Phase B - EXECUTE** (`harness/task_runner.py`, real extension, headed
+Playwright, never calls any LLM endpoint itself): for each goal's first
+validator-passing script, seeds it directly into the real extension's
+`chrome.storage.local.lflScripts` (same service-worker-eval technique this
+harness already uses for dev hooks/rate-limit state - `run` still
+re-validates independently at invocation time, so seeding cannot smuggle an
+index-addressed/malformed step past the product), types `run <name>
+[args...]` for real, approves the plan-preview card, drives a multi-cycle
+watch loop through navigations/nav-confirms/pauses to a terminal state, then
+runs the goal's success checks (`url_contains`/`text_visible`/`field_value`)
+against the live page.
+
+```
+python3 harness/task_runner.py --tier fixture --authored harness/results/authored-<...>.json
+python3 harness/task_runner.py --tier fixture --authored <path> --only shop-open-blue-widget   # one goal
+```
+
+`--tier fixture|realsite|all` (default `fixture`) selects which goals to
+run - `fixture` is the self-contained `harness/corpus/tasks/` mini-site
+(a small shop: `shop.html -> products.html -> item-*.html` + a
+`search-results.html` + a `signup.html` form), `realsite` is 4 Wikipedia
+goals (network-dependent, non-reproducible day to day, reported separately -
+see RESULTS-TASKS.md).
+
+**Scoring buckets** (design doc section 6, mutually exclusive per goal):
+`invalid_author` (no validator-passing script), `wrong_plan` (ran to the
+right terminal state, success checks failed), `halted` (a step no-match /
+arrival-halt / product error, or this harness's own nav-confirm safety
+policy - see below), `fell_to_model` (the script needed the model lane -
+either an explicit `ask`/click-etc proposal, or a `go` destination that
+needed the extension's nav-lane model fallback - Phase B always rejects
+these to stay execution-model-independent, design doc section 9 sign-off
+E), `pause_unexpected`, `timeout`, `harness_error`. `task_success` = the
+first valid script reaches `completed` (or `paused`, for `expect_pause`
+goals) AND every success check passes.
+
+**Build-time deviation from the design doc, flagged here on purpose:** the
+design doc's section 4 watch loop says an approval-gated `pendingNav` card
+is always approved (Enter). Real evidence from the first 4B run
+(`harness/RESULTS-TASKS.md`'s "Key finding") showed the shipped payload's
+lack of any current-page context routinely makes the model open a script
+with a hallucinated `go <destination>` step - which, if blindly approved,
+would make Chrome open a REAL, DIRECT (not Tor-proxied) connection to an
+arbitrary invented host during what the design calls a self-contained
+fixture-tier run. `task_runner.py` therefore only auto-approves a
+`pendingNav` whose origin is on a fixed per-tier allowlist (fixture: the
+local corpus origin only; realsite: `*.wikipedia.org` only) and Escapes
+(rejects) anything else, bucketed `halted` with an explicit
+"harness safety policy, not a product-side halt" note in the evidence so it
+is never confused with a genuine product-side rejection. A `pendingNav`
+with `modelResolved: true` (the extension's own nav-lane model fallback,
+triggered when a `go` destination cannot be resolved as a literal
+domain/URL - a real call to the extension's hardcoded `127.0.0.1:1238`)
+is always rejected too, bucketed `fell_to_model`, for the same
+model-independence reason `ask`-style `pendingProposal`s already are.
+
+**Teach-UI equivalence.** Scripts enter storage by direct seeding, not by
+the hand-typed `teach ... -> save` UI flow - the wire-payload equivalence is
+proven (`shipped_payload.js` calls the real `buildBrainstormPayload()`), the
+UI save path itself is a manual smoke, not an automated one (design doc
+section 3's disclosed mitigation).
 
 ## Honesty notes for whoever verifies this next
 

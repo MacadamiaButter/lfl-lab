@@ -13,6 +13,11 @@ against a model on `LFL_MODEL_ENDPOINT` (see `harness/README.md`). The raw
 per-run JSON lands in `harness/results/` (gitignored - never committed); the
 counts below are transcribed from two consecutive full runs, not asserted.
 
+This file measures *validity/safety*, never *usefulness*. See
+`harness/RESULTS-TASKS.md` for the separate task-success bench (does an
+authored script, executed by the real extension, actually accomplish the
+goal).
+
 ## Model under test
 
 - **Model:** `Qwen3-4B-Instruct-2507-Q5_K_M.gguf` (the 4B execution-lane
