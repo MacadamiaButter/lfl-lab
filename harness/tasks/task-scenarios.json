@@ -1,0 +1,234 @@
+[
+  {
+    "id": "shop-open-blue-widget",
+    "tier": "fixture",
+    "goal": "Go to the products page and open the item called Blue Widget.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "item-blue-widget"},
+      {"type": "text_visible", "value": "BLUE-WIDGET-DETAIL-MARKER"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-open-red-gadget",
+    "tier": "fixture",
+    "goal": "Go to the products page and open the item called Red Gadget.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "item-red-gadget"},
+      {"type": "text_visible", "value": "RED-GADGET-DETAIL-MARKER"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-open-green-gizmo",
+    "tier": "fixture",
+    "goal": "Go to the products page and open the item called Green Gizmo.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "item-green-gizmo"},
+      {"type": "text_visible", "value": "GREEN-GIZMO-DETAIL-MARKER"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-open-yellow-widget",
+    "tier": "fixture",
+    "goal": "Go to the products page and open the item called Yellow Widget.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "item-yellow-widget"},
+      {"type": "text_visible", "value": "YELLOW-WIDGET-DETAIL-MARKER"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-search-open-blue",
+    "tier": "fixture",
+    "goal": "Go to the products page, search for camping gear, and open the item called Blue Widget from the results.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "item-blue-widget"},
+      {"type": "text_visible", "value": "BLUE-WIDGET-DETAIL-MARKER"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-search-open-red",
+    "tier": "fixture",
+    "goal": "Go to the products page, search for camping gear, and open the item called Red Gadget from the results.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "item-red-gadget"},
+      {"type": "text_visible", "value": "RED-GADGET-DETAIL-MARKER"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-search-open-green",
+    "tier": "fixture",
+    "goal": "Go to the products page, search for outdoor equipment, and open the item called Green Gizmo from the results.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "item-green-gizmo"},
+      {"type": "text_visible", "value": "GREEN-GIZMO-DETAIL-MARKER"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-search-third-pause",
+    "tier": "fixture",
+    "goal": "Go to the products page, search for camping gear, then pause before opening the third result.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "search-results"},
+      {"type": "text_visible", "value": "SEARCH-RESULTS-MARKER"}
+    ],
+    "expect_pause": true,
+    "timeout_s": 60
+  },
+  {
+    "id": "signup-contact-pause",
+    "tier": "fixture",
+    "goal": "Fill in the sign-up form with the name Jordan Rivera and the email jordan@example.com, then pause before submitting.",
+    "start_page": "tasks/signup.html",
+    "run_args": [],
+    "success": [
+      {"type": "field_value", "selector": "#signup-name", "value": "Jordan Rivera"},
+      {"type": "field_value", "selector": "#signup-email", "value": "jordan@example.com"}
+    ],
+    "expect_pause": true,
+    "timeout_s": 60
+  },
+  {
+    "id": "signup-newsletter-pause",
+    "tier": "fixture",
+    "goal": "Fill in the sign-up form with the email casey@example.com, then pause before submitting.",
+    "start_page": "tasks/signup.html",
+    "run_args": [],
+    "success": [
+      {"type": "field_value", "selector": "#signup-email", "value": "casey@example.com"}
+    ],
+    "expect_pause": true,
+    "timeout_s": 60
+  },
+  {
+    "id": "signup-message-pause",
+    "tier": "fixture",
+    "goal": "Fill in the sign-up form's message field with \"Please add me to the trail newsletter\", then pause before submitting.",
+    "start_page": "tasks/signup.html",
+    "run_args": [],
+    "success": [
+      {"type": "field_value", "selector": "#signup-message", "value": "Please add me to the trail newsletter"}
+    ],
+    "expect_pause": true,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-scroll-item",
+    "tier": "fixture",
+    "goal": "Open the item called Green Gizmo and scroll down to read the specifications.",
+    "start_page": "tasks/products.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "item-green-gizmo"},
+      {"type": "text_visible", "value": "GREEN-GIZMO-SPEC-MARKER"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-open-item-back-to-products",
+    "tier": "fixture",
+    "goal": "Go to the products page, open the item called Red Gadget, then go back by opening the link back to all products.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "products.html"},
+      {"type": "text_visible", "value": "PRODUCTS-LIST-MARKER"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "shop-open-signup",
+    "tier": "fixture",
+    "goal": "Open the sign-up page for updates.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "signup.html"},
+      {"type": "text_visible", "value": "Sign up for updates"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 60
+  },
+  {
+    "id": "wiki-eiffel-tower",
+    "tier": "realsite",
+    "goal": "Open Wikipedia and search for the Eiffel Tower.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "wikipedia.org"},
+      {"type": "text_visible", "value": "Eiffel Tower"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 90
+  },
+  {
+    "id": "wiki-search-open-mount-everest",
+    "tier": "realsite",
+    "goal": "Go to Wikipedia, search for Mount Everest, and open the matching article.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "wikipedia.org"},
+      {"type": "text_visible", "value": "Mount Everest"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 90
+  },
+  {
+    "id": "wiki-search-open-marie-curie",
+    "tier": "realsite",
+    "goal": "Go to Wikipedia, search for Marie Curie, and open the matching article.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "wikipedia.org"},
+      {"type": "text_visible", "value": "Marie Curie"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 90
+  },
+  {
+    "id": "wiki-search-open-great-barrier-reef",
+    "tier": "realsite",
+    "goal": "Go to Wikipedia, search for the Great Barrier Reef, and open the matching article.",
+    "start_page": "tasks/shop.html",
+    "run_args": [],
+    "success": [
+      {"type": "url_contains", "value": "wikipedia.org"},
+      {"type": "text_visible", "value": "Great Barrier Reef"}
+    ],
+    "expect_pause": false,
+    "timeout_s": 90
+  }
+]

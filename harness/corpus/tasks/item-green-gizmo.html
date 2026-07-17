@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lfl-lab task fixture: Green Gizmo</title>
+<style>
+  /* Tall spacer so the specifications section sits below the fold - the
+     scroll-down goal is authored against this page. Success checks in
+     task-scenarios.json use text_visible (a DOM/content search, not a
+     viewport check - see harness/README.md's honest-limits note), so this
+     spacer does not gate the check itself; it keeps the page shape honest
+     for a human or a future viewport-aware check. */
+  #spacer { height: 1400px; }
+</style>
+</head>
+<body>
+<h1>Green Gizmo</h1>
+<p id="green-gizmo-marker">GREEN-GIZMO-DETAIL-MARKER - a foldable gizmo that
+fits any pack pocket. Self-contained fixture page, no external requests.</p>
+<div id="spacer"></div>
+<h2>Specifications</h2>
+<p id="green-gizmo-spec-marker">GREEN-GIZMO-SPEC-MARKER - weight 140g, folded
+size 9x6cm, water-resistant shell.</p>
+<p><a id="back-to-products" href="./products.html">Back to all products</a></p>
+</body>
+</html>

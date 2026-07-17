@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lfl-lab task fixture: Sign up for updates</title>
+</head>
+<body>
+<h1>Sign up for updates</h1>
+<p>A plain sign-up form: Name, Email, Message, and a Submit button. Submitting
+is client-side only (no server, no network request) - it just swaps in a
+confirmation marker so a completed submit is observable without any backend.</p>
+
+<form id="signup-form">
+  <label for="signup-name">Name</label>
+  <input id="signup-name" name="name" type="text">
+
+  <label for="signup-email">Email</label>
+  <input id="signup-email" name="email" type="email">
+
+  <label for="signup-message">Message</label>
+  <textarea id="signup-message" name="message"></textarea>
+
+  <button id="signup-submit" type="submit">Sign up</button>
+</form>
+
+<div id="signup-confirmation" hidden>SIGNUP-CONFIRMED-MARKER - thanks, you are
+on the list.</div>
+
+<p><a id="back-to-shop" href="./shop.html">Back to shop</a></p>
+
+<script>
+  // Client-side only: no fetch, no form action/method, nothing leaves this
+  // page. Exists so a completed (non-paused) submit is independently
+  // observable via a distinctive marker, per the design doc's corpus spec -
+  // no fixture-tier task-scenarios.json goal actually reaches this today
+  // (every signup goal pauses before the submit click, since clicking a
+  // specific button by position/target is not expressible by the fixed
+  // script verb set and always requires `pause` - see harness/README.md).
+  document.getElementById('signup-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    document.getElementById('signup-confirmation').hidden = false;
+  });
+</script>
+</body>
+</html>
