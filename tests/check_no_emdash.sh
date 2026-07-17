@@ -17,7 +17,7 @@ cd "${ROOT}"
 
 echo "scanning tracked files for U+2014 (em dash) ..."
 
-VIOLATIONS="$(git grep -nP '\x{2014}' -- . || true)"
+VIOLATIONS="$(git grep -nIP '\x{2014}' -- . || true)"
 
 if [[ -n "${VIOLATIONS}" ]]; then
   echo "FAIL: em dash (U+2014) found in tracked file(s):" >&2

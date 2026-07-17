@@ -75,11 +75,11 @@ built specifically to try to violate it and show that it holds.
   multiple runs (see `harness/RESULTS-AB.md`); the model-swap workflow itself is
   still manual (see `harness/README.md`), and harder / auto-generated injection
   classes remain future work.
-- **Brainstorm lane in the product** - `brainstorm/` answers whether a large
-  model CAN author valid scripts; wiring that into lfl-terminal itself as a
-  trusted design conversation (goal in, `parseScriptBody()`-validated
-  proposal out, human approves before `setScript()` ever runs) is a separate,
-  not-yet-started build.
+- **Brainstorm lane in the product** - `brainstorm/` answered whether a large
+  model CAN author valid scripts; that lane has since shipped in lfl-terminal
+  (goal in, `parseScriptBody()`-validated proposal out, human approves before
+  `setScript()` ever runs - proven by its `brainstorm_lane_isolation.test.js`).
+  The lab probe remains the place to compare authoring quality across models.
 
 ## Relationship to lfl-terminal
 
