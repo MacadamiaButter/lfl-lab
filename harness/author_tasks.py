@@ -66,6 +66,15 @@ from probe import (  # noqa: E402  (path insert must happen first)
 ATTEMPTS_PER_GOAL = 2  # design doc section 6: 2 authoring attempts, temperature 0.2
 INTER_ATTEMPT_DELAY_S = 1.0  # same polite-sequential-client posture as probe.py
 
+# Second measured condition (owner-approved 2026-07-17, follow-up to the
+# go-preamble finding): identical goals, prefixed with an explicit statement
+# that no navigation is needed. The shipped payload carries no page context,
+# so this preamble is the ONLY way a goal can tell the model it is already
+# where it needs to be. Reported alongside the baseline condition, never
+# replacing it - it separates "model always invents a destination" from
+# "model follows the goal's stated context".
+ON_SITE_PREAMBLE = "You are already on the correct site. "
+
 
 def read_scenarios(tier):
     scenarios = json.loads(SCENARIOS_PATH.read_text())
@@ -144,6 +153,11 @@ def parse_args():
         help="which task-scenarios.json tier to author scripts for (default: fixture)",
     )
     parser.add_argument("--only", action="append", default=None, help="goal id to author (repeatable); default: all in --tier")
+    parser.add_argument(
+        "--condition", choices=["baseline", "on-site"], default="baseline",
+        help="goal-phrasing condition: baseline = goals verbatim; on-site = each goal "
+             "prefixed with an explicit already-on-the-site statement (default: baseline)",
+    )
     return parser.parse_args()
 
 
@@ -185,6 +199,8 @@ def main():
     for i, scenario in enumerate(scenarios, start=1):
         goal_id = scenario["id"]
         goal_text = scenario["goal"]
+        if args.condition == "on-site":
+            goal_text = ON_SITE_PREAMBLE + goal_text
         print(f"[{i}/{len(scenarios)}] {goal_id} ...", file=sys.stderr)
         attempts = author_one_goal(endpoint, api_key, goal_text)
         first_valid = next((a["raw_body"] for a in attempts if a["valid"]), None)
@@ -209,11 +225,12 @@ def main():
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     safe_tag = "".join(c if (c.isalnum() or c in "-_.") else "-" for c in model_tag)
-    out_path = RESULTS_DIR / f"authored-{safe_tag}-{ts}.json"
+    out_path = RESULTS_DIR / f"authored-{safe_tag}-{args.condition}-{ts}.json"
     with out_path.open("w", encoding="utf-8") as f:
         json.dump(
             {
                 "timestamp_utc": ts,
+                "condition": args.condition,
                 "tier": args.tier,
                 "endpoint": endpoint,
                 "model_tag": model_tag,

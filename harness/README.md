@@ -255,12 +255,28 @@ in `harness/tasks/task-scenarios.json`, makes 2 authoring attempts against
 (`brainstorm/shipped_payload.js`/`brainstorm/probe.py`, imported not
 reimplemented - see those files' own headers), validates each attempt
 through the real `parseScriptBody()` (`brainstorm/validate.js`), and writes
-`harness/results/authored-<modeltag>-<utcts>.json` keyed by goal id.
+`harness/results/authored-<modeltag>-<condition>-<utcts>.json` keyed by
+goal id.
 
 ```
 export LFL_BRAINSTORM_ENDPOINT=http://127.0.0.1:1241   # 4B, keyless, local
-python3 harness/author_tasks.py --tier fixture
+python3 harness/author_tasks.py --tier fixture --condition baseline
+python3 harness/author_tasks.py --tier fixture --condition on-site
 ```
+
+**`--condition baseline|on-site` (default `baseline`).** Two measured
+conditions, same goal set, same corpus: `baseline` authors each goal's text
+verbatim; `on-site` prefixes every goal with the fixed line
+`"You are already on the correct site. "` (`ON_SITE_PREAMBLE` in
+`author_tasks.py`) before sending it to the model. This is a goal-text
+manipulation only - the shipped payload sent to the model still carries no
+URL/page-title/page-context in either condition, so `on-site` measures
+whether the model follows an explicitly stated fact, not whether it can
+infer the same fact from real context it was never given. The two
+conditions are always reported separately, never pooled - see
+`harness/RESULTS-TASKS.md`'s Methodology/Findings sections for why (the
+go-preamble failure mode this isolates) and for the full 2x2 (model x
+condition) results.
 
 **Phase B - EXECUTE** (`harness/task_runner.py`, real extension, headed
 Playwright, never calls any LLM endpoint itself): for each goal's first

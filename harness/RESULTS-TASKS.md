@@ -1,88 +1,234 @@
 # RESULTS-TASKS - task-success bench (goal -> authored script -> real execution -> observed outcome)
 
 Design doc: `LFL-LAB-TASK-SUCCESS-BENCH-DESIGN.md` (2026-07-17, approved,
-kept outside this repo with the operator's other planning docs). This is a
-skeleton with the table structure the design calls for (section 6) and one
-real, initial 4B fixture-tier run filled in - every other cell is TBD,
-never invented. Regenerate/extend it yourself with
-`harness/author_tasks.py` (Phase A) then `harness/task_runner.py`
-(Phase B) - see `harness/README.md`'s task-success section for the exact
-commands.
+kept outside this repo with the operator's other planning docs). Regenerate/
+extend this yourself with `harness/author_tasks.py` (Phase A) then
+`harness/task_runner.py` (Phase B) - see `harness/README.md`'s task-success
+section for the exact commands, including the `--condition` flag described
+below.
 
 Read the LIMITATIONS section as part of the result, same posture as
 `harness/RESULTS.md` and `harness/RESULTS-AB.md` - this bench's honesty is
 its credibility, not a footnote to it.
 
-## Headline result so far
+## Methodology
 
-**4B (`lfl-cohort-4b`, `127.0.0.1:1241`, shipped payload), fixture tier,
-2026-07-17: authored_valid 14/14 (attempt 1; also 14/14 any-attempt - see
-"authored_valid, precisely" below), task_success 0/14 (n_rated 14, 0
-excluded as `harness_error` - see "denominator, precisely" below).** The
-0/14 is not a harness failure - see "Key finding" below. It is a real,
-fully-attributed measurement: every one of the 14 authored scripts opened
-with a `go <destination>` step despite the run already starting on the
-correct page, and every one of those destinations was either rejected by
-this harness's own nav-confirm safety policy (8 rows) or required a live
-nav-lane model call to `:1238` that then declined to navigate (6 rows) -
-before any task-relevant step ran (see the corrected bucket table below).
+Phase A (AUTHOR, no browser) makes 2 authoring attempts per goal against the
+real shipped wire payload; Phase B (EXECUTE, real extension, headed
+Playwright) seeds the first validator-passing script and drives it to a
+terminal state, then runs the goal's own success checks. See
+`harness/README.md`'s task-success section for the full mechanics
+(go-step pre-classification, the nav-confirm origin allowlist,
+`min_steps_executed`) - this section covers only what is new tonight.
 
-**Corrected 2026-07-17 (verify-pass fix):** an earlier version of this
-section misattributed 3 of those 14 rows (`shop-open-red-gadget`,
-`shop-open-green-gizmo`, `shop-open-item-back-to-products`) to the
-product's DETERMINISTIC `go`-verb resolution ladder. That was wrong - see
-"Key finding" below for the corrected mechanism and
-`harness/tasks/resolve_go.js` for the fix. The bucket counts in this
-document are now taken directly from a re-run with the corrected runner
-(`harness/results/tasks-run-lfl-cohort-4b-20260717T083339Z.json`), not
-recomputed by hand.
+**Two measured conditions, same goal set, same models, same corpus.**
+`harness/author_tasks.py --condition baseline` authors each goal's text
+verbatim (the design doc's original convention). `--condition on-site`
+authors the exact same goal text with one fixed line prepended:
 
-**authored_valid, precisely.** Design doc section 6 defines `authored_valid`
-as "a goal counts valid if attempt 1 is valid - attempt 2 is recorded for
-stability info only" - `harness/author_tasks.py` now reports this exact
-number (`n_valid_attempt1`) separately from the any-of-2-attempts number
-(`n_valid_any_attempt`), which an earlier version of this script conflated
-under one ambiguous `n_valid` field. For this run both happen to be 14/14
-(every goal's first attempt was already valid), so the distinction does not
-change this run's headline, but the field names in
-`harness/results/authored-*.json` now say precisely which number is which.
+```
+You are already on the correct site.
+```
 
-**denominator, precisely.** Design doc section 6 also says `harness_error`
-is "excluded from rates, counted" - `harness/task_runner.py` now computes
-`task_success` over `n_rated` (total rows minus `harness_error` rows), not
-over the full row count, and reports the excluded count separately. This
-run had 0 `harness_error` rows, so the number is unaffected here, but a run
-that hits a real harness bug on one goal will no longer silently shrink the
-reported rate.
+(`ON_SITE_PREAMBLE` in `harness/author_tasks.py`.) This is owner-approved
+follow-up work to the go-preamble finding first observed in the original
+single-condition 4B run (see "Mechanism" below): the shipped payload sends
+only `{"goal": "<text>"}` to the model, with no URL, no page title, no
+signal that a `teach` session is already sitting on the relevant page. A
+model that always opens with a `go <destination>` step under that payload
+could mean either of two very different things - "this model always invents
+a destination regardless of context" or "this model follows whatever
+context the goal happens to state, and the shipped payload just never gives
+it any." The on-site condition isolates the second question: it changes
+nothing about the corpus, the extension, or the wire format itself - it is
+a goal-text manipulation only, run through the exact same unmodified
+authoring and execution pipeline. **The shipped payload sent to the real
+product still carries no page context in either condition** - on-site
+proves what the model does when it is TOLD there is no navigation to do,
+not what the shipped product tells it by default. That gap is real and
+stays open; see LIMITATIONS.
 
-35B (fleet, `:1236`) and the realsite tier are **not run in this build** -
-the 35B run is explicitly owner/Fable-scheduled work outside this build
-(see design doc section 8 item 5 and the hard constraint against this
-build touching `:1236`); the realsite tier is wired up and smoke-tested
-(see `harness/README.md`) but not run for a real published number here.
+Two models, run through both conditions the same night, same corpus, same
+harness build:
 
-## Key finding: the shipped payload gives the model no current-page context
+- **4B** - `lfl-cohort-4b`, `http://127.0.0.1:1241` (iGPU, keyless, local).
+- **36B (fleet)** - the fleet machine's currently-loaded ~36B model, on the
+  fleet's tailnet `:1236` endpoint (this is the previously TBD "35B fleet"
+  row; the fleet's loaded model has changed since that placeholder was
+  written, roughly a 9x parameter jump from the 4B). The exact model tag
+  and tailnet address are intentionally kept out of this public doc - they
+  are two of this repo's own `tests/check_no_leaks.sh` patterns - and live
+  only in the gitignored raw JSON's `model_tag`/`endpoint` fields.
+
+Four authoring runs (`authored-<model>-<condition>-<ts>.json`) and four
+Phase B execution runs (`tasks-run-<model>-<ts>.json`) were completed
+2026-07-17, forming a full 2x2 (model x condition). Raw files are in
+`harness/results/` (gitignored, not committed) - regenerate with the
+commands in `harness/README.md`.
+
+## Canonical results: the 2x2 (model x condition)
+
+**Headline.** Both models authored 14/14 valid scripts on attempt 1 in all
+four cells (see "authored_valid, precisely" below - this bench's authoring
+validity metric is saturated for both models on this corpus and is not
+where the interesting result lives). The **go-first-step rate is identical
+between the two models within each condition** despite the ~9x parameter
+gap: 14/14 for both models under baseline, 9/14 for both models under
+on-site. The on-site condition produced this bench's **first task
+successes** (2/14 for 4B, 3/14 for 36B (fleet)) - the earlier
+single-condition baseline run never got a chance to show anything past the
+go-preamble failure. See "Findings" below for what these numbers mean and
+do not mean.
+
+| model | condition | authored_valid (attempt1/any) | go-first-step | task_success | wrong_plan | halted | fell_to_model | pause_unexpected | timeout | harness_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 4B (`lfl-cohort-4b`, `:1241`) | baseline | 14/14 / 14/14 | 14/14 | 0/14 | 0 | 10 | 4 | 0 | 0 | 0 |
+| 4B (`lfl-cohort-4b`, `:1241`) | on-site | 14/14 / 14/14 | 9/14 | 2/14 | 3 | 6 | 3 | 0 | 0 | 0 |
+| 36B (fleet, `:1236`) | baseline | 14/14 / 14/14 | 14/14 | 0/14 | 0 | 5 | 9 | 0 | 0 | 0 |
+| 36B (fleet, `:1236`) | on-site | 14/14 / 14/14 | 9/14 | 3/14 | 2 | 0 | 9 | 0 | 0 | 0 |
+| 4B (`lfl-cohort-4b`, `:1241`) | realsite | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+| 36B (fleet, `:1236`) | realsite | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
+
+`go-first-step` is counted directly from each authoring run's
+`first_valid_body` - the fraction of the 14 goals whose first script line
+begins with the `go` verb. `task_success` is `n_success/n_rated` (0
+`harness_error` rows in all four cells this run, so `n_rated = 14`
+throughout - see "denominator, precisely" below). Raw files:
+`authored-lfl-cohort-4b-baseline-20260717T084927Z.json` ->
+`tasks-run-lfl-cohort-4b-20260717T085524Z.json`;
+`authored-lfl-cohort-4b-on-site-20260717T085219Z.json` ->
+`tasks-run-lfl-cohort-4b-20260717T085542Z.json`; and the matching
+36B (fleet) baseline/on-site authored+run JSON pairs, same
+`harness/results/` directory, same 08:53-08:57Z window (filenames omitted
+here on purpose - they embed the real fleet model tag, which is one of
+this repo's own `tests/check_no_leaks.sh` patterns; see the gitignored
+files directly, or regenerate with the commands in `harness/README.md`)
+(all gitignored, not committed).
+
+**Per-goal outcome, all four cells** (bucket, or `SUCCESS` for a row where
+`success: true`; taken verbatim from each raw run's `bucket`/`success`
+fields, never invented):
+
+| goal id | 4B baseline | 4B on-site | 36B baseline | 36B on-site |
+| --- | --- | --- | --- | --- |
+| shop-open-blue-widget | halted | fell_to_model | fell_to_model | fell_to_model |
+| shop-open-red-gadget | fell_to_model | halted | fell_to_model | fell_to_model |
+| shop-open-green-gizmo | fell_to_model | halted | fell_to_model | fell_to_model |
+| shop-open-yellow-widget | halted | fell_to_model | fell_to_model | fell_to_model |
+| shop-search-open-blue | halted | halted | fell_to_model | fell_to_model |
+| shop-search-open-red | halted | halted | fell_to_model | fell_to_model |
+| shop-search-open-green | halted | halted | fell_to_model | fell_to_model |
+| shop-search-third-pause | halted | halted | fell_to_model | fell_to_model |
+| signup-contact-pause | halted | **SUCCESS** (paused) | halted | **SUCCESS** (paused) |
+| signup-newsletter-pause | halted | wrong_plan | halted | wrong_plan |
+| signup-message-pause | fell_to_model | wrong_plan | halted | wrong_plan |
+| shop-scroll-item | fell_to_model | **SUCCESS** | halted | **SUCCESS** |
+| shop-open-item-back-to-products | halted | fell_to_model | fell_to_model | fell_to_model |
+| shop-open-signup | halted | wrong_plan | halted | **SUCCESS** |
+
+## Findings
+
+**(a) The go-first-step rate is identical across the ~9x model jump, in
+both conditions - the go-preamble is a property of the shipped wire
+format, not model scale.** Baseline: 14/14 for both 4B and 36B (fleet).
+On-site: 9/14 for both. A 9x parameter increase changed neither number. The
+mechanism (see "Mechanism" below) is that the shipped payload gives the
+model nothing to ground on - a small model and a much larger one presented
+with the same context-free goal text default to the same navigational
+guess-first behavior at almost exactly the same rate. This is evidence
+against "a bigger model would just know it's already on the site" and
+evidence for "the payload needs to say so."
+
+**(b) The on-site condition produced this bench's first task successes,
+but both models still opened with a navigation guess on most goals despite
+being told explicitly not to.** 9 of 14 goals per model still start with a
+`go` step under on-site - only the 5 goals whose text is unambiguously
+non-navigational (`fill`/`open`/`scroll`-shaped goals: the three signup
+goals, `shop-scroll-item`, `shop-open-signup`) got a preamble-honoring
+first step from both models. The 8 shop-goal-with-shop-language goals
+(`shop-open-*`, `shop-search-*`) kept the `go` guess for both models even
+with the on-site sentence sitting directly in front of the goal text. An
+explicit stated fact in the prompt is not enough to fully override the
+learned "authoring a script always starts with a destination" prior on
+this corpus.
+
+**(c) Differential failure signature: 4B tends to invent literal fake
+domains, 36B (fleet) tends toward vague non-literal destinations.**
+Baseline: 4B's 14 `go`-first scripts split 10 `halted` (harness-allowlist
+rejection of a literal-looking domain) / 4 `fell_to_model` (needsNavLane,
+a real live `:1238` call); the fleet 36B split the other way, 5 `halted`
+/ 9 `fell_to_model`. The same skew holds among the on-site condition's
+9 `go`-first rows per model: 4B 6 `halted` / 3 `fell_to_model`;
+36B (fleet) 0 `halted` / 9 `fell_to_model`. Real quoted `go` arguments
+from the authored JSONs:
+- 4B, literal-domain-shaped (parsed as a literal URL by `resolveGoLadder()`,
+  then rejected by this harness's own nav-confirm allowlist - never reaches
+  the model a second time): `go products.page.com`, `go product.com`,
+  `go signuptemplate.com`, `go productstore.com`, `go signuptoday.com`.
+- 36B (fleet), vague/non-literal (no dot, or not URL-shaped, so
+  `resolveGoLadder()` returns `needsNavLane: true` and the extension makes
+  a real nav-lane call to `:1238`): `go products page`, `go products`
+  (used on 9 of its 14 baseline goals, near-verbatim).
+- Both models also produce the other pattern sometimes (4B: `go "products"`,
+  `go "green gizmo store"`, both `fell_to_model`; 36B (fleet):
+  `go example.com`, `go lfl-terminal.com`, both `halted`) - this is a skew,
+  not a hard rule, and the skew held across both conditions tonight.
+
+**(d) `wrong_plan` appears only under on-site - execution exposes
+authoring shallowness that authoring validity cannot.** 0 `wrong_plan` rows
+in either baseline cell (nothing got past the go-preamble far enough to be
+scored on plan quality). Under on-site, 5 `wrong_plan` rows appeared across
+both models (3 for 4B, 2 for 36B (fleet)), all real execution failures
+of scripts that had already passed `parseScriptBody()`: `signup-newsletter-
+pause` and `signup-message-pause` ran to `completed` for both models
+instead of pausing before submit (the goal asks for a pause; `classify()`
+demotes a completed run on an `expect_pause` goal to `wrong_plan`
+regardless of what the checks say). `signup-message-pause` additionally
+fails its own `field_value` check for both models (`observed: ""` against
+the `#signup-message` selector) - both models authored a script that never
+actually lands text in the message field. `shop-open-signup` (4B only)
+authored a plausible-looking single `open "Sign up for updates"` step, but
+scored `wrong_plan` because the `url_contains signup.html` check read
+`false` against the captured `final_url` (still `shop.html`) even though
+the step's own `last_result` says `"opening \"Sign up for updates\" ->
+.../signup.html"` - consistent with the async-navigation-vs-check-timing
+class of issue this repo's LIMITATIONS and README's "Honesty notes"
+already disclose elsewhere, not a new mechanism. None of this was visible
+at authoring-validity time; only real execution against real checks caught
+it.
+
+**(e) The paused-success case.** `signup-contact-pause` is the one goal
+that both models scripted correctly enough to succeed under on-site: `fill
+name with "Jordan Rivera"`, `fill email with "jordan@example.com"`, `pause
+"click the Submit button"` (4B) and the equivalent for 36B (fleet), both
+reaching `state: paused` with both pre-pause `field_value` checks
+(`#signup-name`, `#signup-email`) passing (`ok: true`), scored
+`success: true`. This is a real model-authored script correctly stopping
+at a pause with the checks that matter (the fields it filled before the
+pause) verified, not a scenario the harness engineered to succeed.
+
+**Live `:1238` nav-lane call counts, from `fell_to_model` row counts per
+run (one row = one live call, same accounting `harness/README.md` already
+uses):** 4B baseline 4, 4B on-site 3, 36B (fleet) baseline 9,
+36B (fleet) on-site 9 - **25 live nav-lane calls total across tonight's
+2x2**, none of them stubbed or simulated.
+
+## Mechanism: the shipped payload gives the model no current-page context
 
 Phase A's shipped-payload variant (`brainstorm/shipped_payload.js`, loading
 the real `buildBrainstormPayload()`) sends only `{"goal": "<text>"}` as the
 user turn - no URL, no page title, no indication that a `teach`/authoring
-session is already sitting on the relevant page. Given every fixture goal
-here, the 4B model authored a `go <destination>` step as line 1 of every
-single script, even for goals with zero navigational language (e.g.
-`signup-contact-pause`'s goal is "Fill in the sign-up form with the name
-Jordan Rivera and the email jordan@example.com, then pause before
-submitting" - no mention of "go" or "open" at all - and the model still
-opened with `go signuptemplate.com`).
+session is already sitting on the relevant page. This is the root cause
+behind Finding (a) above, and it is a genuine, reproducible property of the
+shipped product's brainstorm-lane prompt, not an artifact of this bench's
+goal phrasing (the design doc's own goal-phrasing convention, section 5,
+deliberately mirrors real `teach` usage - a real user sitting on the same
+page would get the same model behavior under the shipped payload). Two
+sub-patterns of `go`-first authoring were observed (a third, described in
+an earlier version of this document, turned out to be a misattributed
+instance of the second - see "Correction" below):
 
-This is a genuine, reproducible property of the shipped product's
-brainstorm-lane prompt, not an artifact of this bench's goal phrasing (the
-design doc's own goal-phrasing convention, section 5, deliberately mirrors
-real `teach` usage - a real user sitting on the same page would get the
-same model behavior). Two sub-patterns were observed in the corrected run
-(a third, described in an earlier version of this document, turned out to
-be a misattributed instance of the second - see "Correction" below):
-
-1. A plausible-looking but invented domain (e.g. `go products.go.com`,
+1. A plausible-looking but invented domain (e.g. `go products.page.com`,
    `go signuptemplate.com`) - `resolveGoLadder()`'s step 1
    (`resolveLiteralDestination()`) resolves it as a literal `https://`
    hostname (it has a dot, so it looks like a domain) WITHOUT ever
@@ -92,25 +238,24 @@ be a misattributed instance of the second - see "Correction" below):
    does not anticipate. **Build-time deviation from the design doc**
    (flagged in the original build report): `harness/task_runner.py` adds a
    nav-confirm origin allowlist (fixture tier: only the local corpus
-   origin; realsite tier: only `https://*.wikipedia.org` - see FIX 3 below)
-   and rejects (Escape) anything else, bucketed `halted` with an explicit
-   "harness safety policy, not a product-side halt" note in the evidence.
-   This is the ONLY sub-pattern that is genuinely deterministic/product-side
-   - 8 of the 14 fixture rows land here.
+   origin; realsite tier: only `https://*.wikipedia.org`) and rejects
+   (Escape) anything else, bucketed `halted` with an explicit "harness
+   safety policy, not a product-side halt" note in the evidence. This is
+   the ONLY sub-pattern that is genuinely deterministic/product-side.
 2. Anything else non-empty (a bare word like `products`, a natural-language
-   phrase like `"green gizmo store"`, a full URL like
-   `"https://example.com/updates"`) - `resolveGoLadder()`'s step 1 fails (no
-   dot, or not literal-URL-shaped for the ladder's purposes) and step 2
-   (alias) never fires (no alias was ever defined for these scripts), so
-   the ladder returns `{ok:false, needsNavLane:true}` - see `nav.js`'s own
-   step-3 comment: "steps 1-2 both missed; caller must fall back to the
-   nav-lane model call... with the ORIGINAL typed command text". At that
-   point `terminal.js`'s `_handleGo()` makes a REAL `NAV_LLM_REQUEST` call
-   to the extension's hardcoded `127.0.0.1:1238` endpoint (not
-   `:1236`/`:1241`, and not stopped/started/touched by this build) and one
-   of two things happens with the model's response:
-   - the model proposes `{action: "navigate", value: "..."}` -> surfaces as
-     a `pendingNav` card with `modelResolved: true`, always rejected
+   phrase like `"green gizmo store"`, a quoted full URL like
+   `"https://example-signup.com/form"`) - `resolveGoLadder()`'s step 1
+   fails (no dot, or not literal-URL-shaped for the ladder's purposes) and
+   step 2 (alias) never fires (no alias was ever defined for these
+   scripts), so the ladder returns `{ok:false, needsNavLane:true}` - see
+   `nav.js`'s own step-3 comment: "steps 1-2 both missed; caller must fall
+   back to the nav-lane model call... with the ORIGINAL typed command
+   text". At that point `terminal.js`'s `_handleGo()` makes a REAL
+   `NAV_LLM_REQUEST` call to the extension's hardcoded `127.0.0.1:1238`
+   endpoint (not `:1236`/`:1241`, and not stopped/started/touched by this
+   build) and one of two things happens with the model's response:
+   - the model proposes `{action: "navigate", value: "..."}` -> surfaces
+     as a `pendingNav` card with `modelResolved: true`, always rejected
      (Escape) by `task_runner.py`, bucketed `fell_to_model` directly.
    - the model declines to navigate (`action` is something other than
      `"navigate"`, e.g. because it judged the destination too vague) ->
@@ -133,96 +278,40 @@ unmodified `nav.js` - see `harness/tasks/resolve_go.js` and its R1 check
 below), which means the ladder does NOT reject `"products"` itself - it
 falls through to the nav-lane model call, exactly as sub-pattern 2 above
 describes. The tell that gave this away: the SAME input (`"products"`)
-produced TWO DIFFERENTLY WORDED messages across the two rows that hit it
-("... no specific site or domain named; 'products' is too generic to
-resolve to a single destination" vs "... no specific site named;
-'products' is too generic to resolve to a single destination") - a
-deterministic string table cannot do that; a live model sampling a free-text
-`reason` field can. By this bench's own criterion for `fell_to_model` (a
-real nav-lane model call happened), all 3 rows are `fell_to_model`, not
-`halted`.
+produced differently-worded messages across rows that hit it - a
+deterministic string table cannot do that; a live model sampling a
+free-text `reason` field can. By this bench's own criterion for
+`fell_to_model` (a real nav-lane model call happened), all such rows are
+`fell_to_model`, not `halted`.
 
-`harness/task_runner.py` now pre-classifies every `go` step's argument
-through `harness/tasks/resolve_go.js` (which requires the real,
-unmodified `nav.js` and calls its real `resolveGoLadder()` - never
-reimplemented) BEFORE each run, and reclassifies a genuine product-side
-`halted` outcome (i.e. NOT the harness's own nav-confirm-allowlist
-rejection, sub-pattern 1 above) to `fell_to_model` whenever the failing
-step's `go` argument resolves `needsNavLane: true` - see that file's own
-header and `classify_go_steps()`/the reclassification block in
-`run_one_scenario()` for the exact logic. Classification never matches on
-the model's message text; it is driven entirely by the real product
-resolver's own verdict on the argument.
+`harness/task_runner.py` pre-classifies every `go` step's argument through
+`harness/tasks/resolve_go.js` (which requires the real, unmodified `nav.js`
+and calls its real `resolveGoLadder()`, never reimplemented) BEFORE each
+run, and reclassifies a genuine product-side `halted` outcome (i.e. NOT the
+harness's own nav-confirm-allowlist rejection, sub-pattern 1 above) to
+`fell_to_model` whenever the failing step's `go` argument resolves
+`needsNavLane: true`. Classification never matches on the model's message
+text; it is driven entirely by the real product resolver's own verdict on
+the argument.
 
-**Disclosed plainly:** Phase B triggered approximately 6 live `:1238`
-nav-lane model calls in this fixture-tier run (the 6 rows now bucketed
-`fell_to_model`) - the runner's Escape policy always rejects a
-`modelResolved: true` `pendingNav` card (covering the "model proposed a
-navigate" half of sub-pattern 2), and the fixed allowlist covers
-nav-confirms for literal (non-model) destinations (sub-pattern 1) - but a
-nav-lane abort that happens model-side, before any card is ever shown, is
-neither of those; it is caught only by the pre-classification described
-above. This is the mechanism the correction fixes.
+## Stochasticity disclosure
 
-None of the 14 fixture scripts got past this preamble to exercise the
-actual open/search/fill/scroll/pause steps that follow it - so this run
-says nothing yet about the 4B model's DOWNSTREAM plan quality on this
-corpus, only about the go-preamble failure mode. That is itself a real,
-useful, and slightly unflattering finding about the shipped payload as it
-exists today, and it is reported as observed, not smoothed over. S2/S3/S5
-(see `harness/README.md`) used hand-written scripts specifically to prove
-the rest of the pipeline (seeding, multi-step watch, pause detection,
-success checks, seeded-bypass rejection) works correctly once a script
-gets past this preamble.
-
-## Task-success table (design doc section 6)
-
-`authored_valid` is reported as attempt-1 (the design's own headline
-metric) / any-attempt (see "authored_valid, precisely" above) - identical
-for this run. `task_success` is `n_success/n_rated` (`harness_error` rows
-excluded from the denominator per design section 6 - see "denominator,
-precisely" above); this run had 0.
-
-| model | tier | authored_valid (attempt1/any) | task_success | wrong_plan | halted | fell_to_model | pause_unexpected | timeout | harness_error |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 4B (`lfl-cohort-4b`, `:1241`) | fixture | 14/14 / 14/14 | 0/14 | 0 | 8 | 6 | 0 | 0 | 0 |
-| 4B (`lfl-cohort-4b`, `:1241`) | realsite | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 35B (fleet, `:1236`) | fixture | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-| 35B (fleet, `:1236`) | realsite | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD |
-
-Raw run: `harness/results/tasks-run-lfl-cohort-4b-20260717T083339Z.json`
-(gitignored, not committed - regenerate with the commands in
-`harness/README.md`; authored from the same
-`authored-lfl-cohort-4b-20260717T075902Z.json` the original build run
-consumed, re-run through the corrected runner - see "Correction" above).
-Per-row detail for the 4B fixture run (bucket/evidence taken verbatim from
-that raw JSON, never invented):
-
-| goal id | bucket | evidence (trimmed) |
-| --- | --- | --- |
-| shop-open-blue-widget | halted | harness safety policy blocked `go products.go.com` (off-allowlist) |
-| shop-open-red-gadget | fell_to_model | nav-lane model call occurred (`go "products"` needsNavLane); model's own abort reason: "no specific site or domain named; 'products' is too generic to resolve to a single destination" |
-| shop-open-green-gizmo | fell_to_model | nav-lane model call occurred (`go "products"` needsNavLane); model's own abort reason: "no specific site named; 'products' is too generic to resolve to a single destination" |
-| shop-open-yellow-widget | halted | harness safety policy blocked `go products.page.com` (off-allowlist) |
-| shop-search-open-blue | halted | harness safety policy blocked `go product.com` (off-allowlist) |
-| shop-search-open-red | halted | harness safety policy blocked `go product.com` (off-allowlist) |
-| shop-search-open-green | halted | harness safety policy blocked `go product.com` (off-allowlist) |
-| shop-search-third-pause | halted | harness safety policy blocked `go product.com` (off-allowlist) |
-| signup-contact-pause | halted | harness safety policy blocked `go signuptemplate.com` (off-allowlist) |
-| signup-newsletter-pause | halted | harness safety policy blocked `go signuptemplate.com` (off-allowlist) |
-| signup-message-pause | fell_to_model | `go "https://example-signup.com/form"` - model proposed a `navigate` action, rejected (Escape) per policy |
-| shop-scroll-item | fell_to_model | `go "green gizmo store"` - model proposed a `navigate` action, rejected (Escape) per policy |
-| shop-open-item-back-to-products | fell_to_model | nav-lane model call occurred (`go products` needsNavLane); model's own abort reason: "no specific site named - 'products' is too generic to resolve to a single destination" |
-| shop-open-signup | fell_to_model | `go "https://example.com/updates"` - model proposed a `navigate` action, rejected (Escape) per policy |
-
-Note the three "too generic" rows above have THREE DIFFERENTLY WORDED
-abort reasons for what is, in two cases, the exact same script text
-(`go "products"`) - direct, in-this-run evidence that these messages are
-sampled model output, not a fixed string table (this run's `:1238` answered
-with the fleet's 35B model at call time, per this repo's own
-model-swap-agnostic design - see `harness/README.md`'s "Model-swap A/B
-workflow"; the mechanism is identical regardless of which model sits behind
-that port).
+Authoring is sampled (`temperature: 0.1`, see "The shipped payload pins
+temperature 0.1" in LIMITATIONS below) - re-authoring the same goal set
+against the same model can produce a different bucket mix even when the
+headline number does not move. The earlier single-condition 4B baseline
+run (`authored-lfl-cohort-4b-20260717T075902Z.json` ->
+`tasks-run-lfl-cohort-4b-20260717T083339Z.json`, authored 07:59 UTC) scored
+`halted 8 / fell_to_model 6` - a different bucket mix from tonight's
+re-authored baseline cell (`halted 10 / fell_to_model 4`, same model, same
+condition, same corpus). The `task_success 0/14` headline is unchanged
+between the two runs; only the internal halted/fell_to_model split moved,
+consistent with the same underlying go-first-step failure mode being hit by
+differently-shaped invented destinations from one sampling to the next.
+**Tonight's full 2x2 supersedes that single earlier run as this document's
+canonical result; the 07:59 run is kept here only as a footnote showing the
+bucket mix is not perfectly stable run to run, and is not otherwise cited
+above.**
 
 ## Verification-plan smokes run during this build (design doc section 7, subset)
 
@@ -269,9 +358,10 @@ runs, not invented):
 - **R2 - full fixture-tier Phase B re-run**, corrected runner, same
   authored JSON the original build run consumed
   (`authored-lfl-cohort-4b-20260717T075902Z.json`):
-  `task_success 0/14, halted 8, fell_to_model 6` - matches the corrected
-  bucket table above exactly (see that table's per-row detail; raw output
-  in `tasks-run-lfl-cohort-4b-20260717T083339Z.json`).
+  `task_success 0/14, halted 8, fell_to_model 6` - the run cited in
+  "Stochasticity disclosure" above as the pre-canonical single-condition
+  baseline (raw output in
+  `tasks-run-lfl-cohort-4b-20260717T083339Z.json`).
 - **R3 - degenerate-script probe on `shop-open-item-back-to-products`**:
   the hand-written 1-step script `open "Browse products"` (no `go`, no
   "open the item, then go back") reached `completed`, both end-state
@@ -280,7 +370,7 @@ runs, not invented):
   scored `success=true`, a false positive for a goal that names a specific
   3+-step path. With the `min_steps_executed: 3` floor now on that
   scenario, `steps_executed` was `0` (see the `steps_executed` undercount
-  limitation above - the single step navigated, resetting `lastResult`),
+  limitation below - the single step navigated, resetting `lastResult`),
   which is `< 3`, so the row was correctly demoted to
   `success=false, bucket=wrong_plan` with an explicit
   `{"type": "min_steps_executed", "value": 3, "observed": 0, "ok": false}`
@@ -292,12 +382,23 @@ runs, not invented):
   text/label it expects the model to use (design doc section 5's
   convention) - this mirrors real `teach` usage but means the bench never
   tests whether a model can infer an unnamed destination.
+- **The on-site condition is a goal-text manipulation only.** Prefixing
+  the goal with "You are already on the correct site." changes what the
+  goal SAYS, not what the product SENDS - the shipped payload passed to
+  the real model still carries no URL, no page title, and no other page
+  context in either condition (see "Methodology" above). A model that
+  reliably honors an explicit sentence in the goal text is not the same
+  thing as a model that would infer the same fact from real page context
+  it was never given; this bench has not measured the latter.
 - **Seeded entry path, not the `teach`-UI path.** Scripts enter storage via
   a direct service-worker eval into `chrome.storage.local.lflScripts`, not
   via `teach ... -> save`. The wire-payload equivalence is proven
   (`brainstorm/shipped_payload.js` calls the real `buildBrainstormPayload()`);
   the UI path itself is smoked manually, not benched automatically (design
   doc section 3).
+- **Teach-equivalence smokes (design doc section 7.5) are still pending** -
+  listed here as an open verification item, not yet run as part of this
+  build or the tonight's 2x2.
 - **Fixture pages are model-blind but authored by us.** No adversarial or
   organic-web noise; every marker, label, and link text was chosen to be
   unambiguous.
@@ -306,25 +407,28 @@ runs, not invented):
 - **`nav_confirms` are counted human-equivalent approvals** (Enter presses
   this harness gives on a `pendingNav` card) - a real human could of course
   decline one; this bench always approves an allowlisted nav-confirm and
-  always rejects everything else (see "Key finding" above).
+  always rejects everything else (see "Mechanism" above).
 - **`steps_executed` is a best-effort diagnostic** - a change-detector on
   the observed `lastResult` field, which can undercount when two
   consecutive steps both navigate quickly enough that an intermediate
   settle is never observed before the next page's freshly injected
   `Terminal()` instance resets `lastResult` to `null` (see `terminal.js`'s
   own `_lastResult = null` constructor default; the R3 degenerate-script
-  probe below is itself a live example - it observed `steps_executed: 0`
-  for a 1-step run that did navigate). It is now used for ONE scoring
-  purpose only - the `min_steps_executed` floor described below - never to
-  distinguish `completed` from anything else; final run `state` and the
-  end-state success checks are otherwise unaffected by this undercount.
+  probe above is itself a live example - it observed `steps_executed: 0`
+  for a 1-step run that did navigate; tonight's `shop-open-signup` 4B
+  on-site row, Finding (d) above, is a related timing case where the
+  end-state check itself read before the navigation had settled). It is
+  now used for ONE scoring purpose only - the `min_steps_executed` floor
+  described below - never to distinguish `completed` from anything else;
+  final run `state` and the end-state success checks are otherwise
+  unaffected by this undercount.
 - **N is small** (14 fixture goals, 4 realsite goals) and **single
   machine**.
-- **4B on iGPU Vulkan1** vs the 35B's eventual run **on the fleet's B70** -
-  latency numbers will not be comparable across models even once both are
-  run; task-success rates are the number this bench is actually for.
+- **4B on iGPU Vulkan1** vs **36B (fleet) on the fleet's B70** - latency
+  numbers are not comparable across models even now that both have real
+  runs; task-success rates are the number this bench is actually for.
 - **The nav-confirm origin allowlist is a build-time addition**, not in
-  the original design doc text (see "Key finding" above and this build's
+  the original design doc text (see "Mechanism" above and this build's
   final report) - it changes what a run bucket looks like (an off-allowlist
   `go` is `halted` by harness policy, not left to actually navigate) but
   does not change the product under test. The realsite-tier allowlist now
@@ -346,7 +450,7 @@ runs, not invented):
   floor, an otherwise-passing row is demoted to `wrong_plan` at scoring
   time (see `harness/README.md`'s task-success section for the field's
   contract). Set to `3` on `shop-open-item-back-to-products` (documented
-  in the "R3" smoke below); no other current fixture goal needed it. This
+  in the "R3" smoke above); no other current fixture goal needed it. This
   is a floor, not a real path-shape check - a wrong-but-long-enough script
   can still pass if its end state happens to match.
 - **The shipped payload pins `temperature: 0.1`**
