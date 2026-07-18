@@ -64,9 +64,13 @@ built specifically to try to violate it and show that it holds.
   [`benchmark/RESULTS-LOAD.md`](benchmark/RESULTS-LOAD.md) for the measured
   curves (the single-slot 35B serializes at ~0.5 req/s with linearly-growing
   latency; the 4B runs 4 slots and reaches ~2 req/s).
-- **`tests/check_no_leaks.sh`** and **`tests/check_no_emdash.sh`** - the
-  pre-publish hygiene gates every commit in this repo passes before it is
-  pushed.
+- **`tests/check_no_leaks.sh`**, **`tests/check_no_emdash.sh`**, and
+  **`tests/check_schemas.sh`** - the pre-publish gates every commit in this
+  repo passes before it is pushed: two hygiene gates, plus a schema gate that
+  validates the task-success bench's scenario file and any local run results
+  against the formal shapes under `harness/schemas/`. See
+  [`harness/README.md`](harness/README.md)'s task-success section for what
+  the schemas cover.
 
 ## Roadmap
 

@@ -656,6 +656,18 @@ i.e. the fix, not luck or timing, is what closed it.
   `ensure_http_server()`'s own PID-tracked start/`proc.terminate()` stop -
   no `pkill -f` was used anywhere in this work.
 
+## Result/scenario shapes are now formalized (2026-07-17)
+
+The scenario shape (`harness/tasks/task-scenarios.json`) and the result-row
+shape (`harness/results/tasks-run-*.json`, gitignored) are formalized under
+`harness/schemas/` and checked by `tests/check_schemas.sh` - see
+`harness/README.md`'s new "Result/scenario schemas and the schema gate"
+section for the full contract. Every result row from 2026-07-17 on also
+carries a `resolved_source` field (`harness_checks` for every row this
+codebase writes) recording HOW its `success` value was determined, so a
+future manually-judged or externally-reported row can never be mistaken for
+a harness-verified one. Purely additive - no number or table above changed.
+
 ## LIMITATIONS (read this as part of the result)
 
 - **Goals encode visible labels.** Every goal names the visible link

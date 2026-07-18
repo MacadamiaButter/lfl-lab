@@ -618,7 +618,18 @@ def classify(run_state, expect_pause, checks_ok):
 def run_one_scenario(context, sw, scenario, body, timeout_s_override=None, go_resolve_cache=None):
     name = scenario["id"]
     timeout_s = timeout_s_override or scenario.get("timeout_s", 60)
-    row = {"id": scenario["id"], "tier": scenario.get("tier"), "expect_pause": bool(scenario.get("expect_pause"))}
+    # resolved_source: how `success` was determined for this row. Every row
+    # this harness itself writes is stamped "harness_checks" (the automated
+    # success-check evaluation in evaluate_checks()/classify() below) - see
+    # harness/schemas/task-result-record.schema.json and harness/README.md's
+    # task-success section for the full contract, including the other two
+    # enum values (owner_judged, external) this harness never writes itself.
+    row = {
+        "id": scenario["id"],
+        "tier": scenario.get("tier"),
+        "expect_pause": bool(scenario.get("expect_pause")),
+        "resolved_source": "harness_checks",
+    }
     t0 = time.monotonic()
 
     verdict = validate_body(body)
@@ -823,6 +834,7 @@ def main():
                         row = {
                             "id": goal_id, "tier": scenario.get("tier"),
                             "expect_pause": bool(scenario.get("expect_pause")),
+                            "resolved_source": "harness_checks",
                             "state": "invalid_author", "success": False, "bucket": "invalid_author",
                             "nav_confirms": 0, "steps_executed": 0, "checks": [], "wall_s": 0.0,
                             "evidence": {"note": "no validator-passing script from Phase A for this goal"},

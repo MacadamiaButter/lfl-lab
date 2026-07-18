@@ -1,0 +1,77 @@
+{
+  "$id": "harness/schemas/task-scenario.schema.json",
+  "title": "task-success bench scenario",
+  "description": "Formalizes the shape harness/tasks/task-scenarios.json entries already have, and harness/task_runner.py already reads. This is documentation-after-the-fact of an existing implicit shape, derived by reading task-scenarios.json's 18 entries and task_runner.py's read_scenarios()/run_one_scenario(); it does not add or invent any field. Validated by harness/tasks/validate_schemas.py (hand-rolled, stdlib-only - no jsonschema dependency in this repo).",
+  "type": "object",
+  "required": ["id", "tier", "goal", "start_page", "run_args", "success", "expect_pause", "timeout_s"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable scenario id, unique within task-scenarios.json - used as the storage key for the seeded script (task_runner.py's seed_script()/run_seeded_script()) and as the lookup key into a Phase A authored-*.json's goals map."
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["fixture", "realsite"],
+      "description": "fixture = this repo's self-contained local mini-site (harness/corpus/tasks/), realsite = a live external site (currently Wikipedia only). Selected by task_runner.py's --tier flag and used by nav_origin_allowed() to pick the nav-confirm origin allowlist."
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Plain-English goal text sent to the authoring model in Phase A (harness/author_tasks.py). Not read at all by Phase B (task_runner.py) - Phase B only ever seeds the already-authored script body."
+    },
+    "start_page": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Path relative to harness/corpus/, joined onto http://127.0.0.1:<PORT_A>/ as the page task_runner.py navigates to before seeding and running the script (run_one_scenario()'s start_url)."
+    },
+    "run_args": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Positional args appended to the seeded script's `run <name> [args...]` invocation (run_seeded_script()). Empty in every current scenario; quoted at invocation time if an arg contains a space."
+    },
+    "success": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/success_check"},
+      "description": "Ordered list of success checks, ALL of which must pass (evaluate_checks()/run_one_scenario()'s checks_ok) for a completed/paused run to be scored a success. See classify() in task_runner.py for the full state machine these feed into."
+    },
+    "expect_pause": {
+      "type": "boolean",
+      "description": "True for a goal whose script is meant to park at a `pause` step rather than run to completion (classify(): a paused run without expect_pause is bucket pause_unexpected; a completed run WITH expect_pause is bucket wrong_plan)."
+    },
+    "timeout_s": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Per-scenario wall-clock budget for run_seeded_script()/watch_run() before the row is scored bucket timeout."
+    },
+    "min_steps_executed": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "OPTIONAL. When present, an otherwise-passing row whose observed step count (preferring the product's own lastRunVerdict.stepsTotal when available, falling back to the polling step_dispatched counter) is below this floor is demoted to success=false, bucket=wrong_plan - closes the path-dependent-goal gameability FIX 2 documents in task_runner.py and harness/README.md's task-success section. Only set on task-scenarios.json's shop-open-item-back-to-products today."
+    }
+  },
+  "$defs": {
+    "success_check": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["url_contains", "text_visible", "field_value"],
+          "description": "Matches one of evaluate_checks()'s three implemented check functions in task_runner.py (check_url_contains/check_text_visible/check_field_value). Any other value is a recognized-but-unimplemented check at scoring time (evaluate_checks()'s else branch scores it ok=false with an 'unknown check type' error) - this schema restricts task-scenarios.json authoring to the three that are actually implemented."
+        },
+        "value": {
+          "type": "string",
+          "description": "url_contains: a substring page.url must contain. text_visible: a substring the check looks for via page.get_by_text() first, page.content() as fallback. field_value: the exact expected value of the field named by `selector`."
+        },
+        "selector": {
+          "type": "string",
+          "description": "REQUIRED when type is field_value (a CSS selector passed to page.locator(selector).input_value()); absent for url_contains/text_visible."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -447,6 +447,46 @@ and the verdict-informed floor above, plus the product's dev-hook
 `lastRunVerdict` field), the final result is **14/14, twice,
 byte-identical rows** - the design doc's L1 gate.
 
+## Result/scenario schemas and the schema gate
+
+`harness/schemas/task-scenario.schema.json` and
+`harness/schemas/task-result-record.schema.json` formalize the two shapes
+described above: what a `task-scenarios.json` entry must look like, and what
+a `harness/task_runner.py` result row (`harness/results/tasks-run-*.json`,
+gitignored, never committed) must look like. Both are documentation of an
+existing implicit shape, derived by reading the code that produces/consumes
+it - nothing here changes what `task_runner.py` actually does, except the
+one new field below.
+
+**`resolved_source` (per result row).** Every row `task_runner.py` writes
+now carries `"resolved_source": "harness_checks"` - a record of HOW
+`success` on that row was determined, distinct from the value of `success`
+itself. The enum is `harness_checks | owner_judged | external`:
+`harness_checks` is this repo's own automated `evaluate_checks()`/
+`classify()` path (the only value this codebase ever writes itself);
+`owner_judged` and `external` are reserved for a human-reviewed or
+externally-reported row that some future tool might add to a results file
+by hand. The point: a bare `success: true` never says how it was decided,
+so a manually-judged or externally-reported row could otherwise be
+mistaken for a harness-verified one. The field is optional on any result
+file produced before 2026-07-17 (it did not exist yet); conceptually
+required going forward.
+
+**`tests/check_schemas.sh`** wraps `harness/tasks/validate_schemas.py` (a
+hand-rolled, stdlib-only validator - no `jsonschema` dependency) - it checks
+every entry of `task-scenarios.json` against the scenario schema, and any
+`harness/results/tasks-run-*.json` present against the record schema,
+tolerating (warning, not failing on) a missing `resolved_source` or the
+older pre-"FIX 4a" wrapper shape on a genuinely old local result file, and
+skipping result-record validation silently when no result files exist. Same
+posture as `tests/check_no_leaks.sh`/`tests/check_no_emdash.sh`: a fast,
+dependency-free gate meant to run on every commit.
+
+```
+python3 harness/tasks/validate_schemas.py
+bash tests/check_schemas.sh
+```
+
 ## Honesty notes for whoever verifies this next
 
 - The two bugs found and fixed while first running this battery were both

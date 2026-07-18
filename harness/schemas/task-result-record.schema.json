@@ -1,0 +1,148 @@
+{
+  "$id": "harness/schemas/task-result-record.schema.json",
+  "title": "task-success bench result file (Phase B output)",
+  "description": "Formalizes the shape harness/task_runner.py's main() already writes to harness/results/tasks-run-<modeltag>-<utcts>.json (gitignored runtime artifacts - see harness/README.md and .gitignore; this schema documents the shape, it does not make the files tracked). Derived by reading task_runner.py's main() (top-level object construction) and run_one_scenario()/classify() (per-row 'results' entries) - no field invented. Validated by harness/tasks/validate_schemas.py.",
+  "type": "object",
+  "required": [
+    "timestamp_utc", "tier", "authored_from", "model_tag", "extension_dir",
+    "n_total", "n_harness_error", "n_rated", "n_success", "buckets", "results"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "timestamp_utc": {
+      "type": "string",
+      "description": "UTC run timestamp, time.strftime('%Y%m%dT%H%M%SZ') - also embedded in the output filename."
+    },
+    "tier": {
+      "type": "string",
+      "enum": ["fixture", "realsite", "all"],
+      "description": "The --tier value the run was invoked with (main()'s parse_args() default is fixture)."
+    },
+    "authored_from": {
+      "type": "string",
+      "description": "Path to the Phase A authored-*.json this run consumed (--authored)."
+    },
+    "model_tag": {
+      "type": "string",
+      "description": "Model tag carried through from the authored-*.json's own model_tag field ('unknown' if absent)."
+    },
+    "extension_dir": {
+      "type": "string",
+      "description": "Path to the unpacked lfl-terminal extension directory the run loaded (runner.py's EXTENSION_DIR)."
+    },
+    "n_total": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total row count, including harness_error rows."
+    },
+    "n_harness_error": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of rows with bucket == harness_error - excluded from the task_success denominator (design doc section 6 / FIX 4a in task_runner.py)."
+    },
+    "n_rated": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "n_total - n_harness_error. The actual task_success denominator."
+    },
+    "n_success": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of rows with success == true. task_success rate = n_success / n_rated."
+    },
+    "buckets": {
+      "type": "object",
+      "description": "Histogram of non-null bucket values across all rows (one key per bucket string seen, integer count). Keys are a subset of the bucket enum in the result_row definition below.",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "results": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/result_row"},
+      "description": "One entry per scenario attempted, in scenario order."
+    }
+  },
+  "$defs": {
+    "result_row": {
+      "type": "object",
+      "required": [
+        "id", "tier", "expect_pause", "state", "success", "bucket",
+        "nav_confirms", "steps_executed", "evidence", "checks", "wall_s"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "description": "Scenario id (task-scenarios.json's id field)."},
+        "tier": {"type": "string", "enum": ["fixture", "realsite"]},
+        "expect_pause": {"type": "boolean", "description": "Copied from the scenario definition."},
+        "resolved_source": {
+          "type": "string",
+          "enum": ["harness_checks", "owner_judged", "external"],
+          "description": "How `success` on this row was determined. harness_checks = this file's own automated success-check evaluation (evaluate_checks()/classify() in task_runner.py) - every row task_runner.py writes stamps this value. owner_judged = a human reviewed the evidence and set success by hand. external = success came from some other, non-harness system's report. OPTIONAL and absent on any result file produced before 2026-07-17 (the field did not exist yet - see harness/README.md's task-success section and RESULTS-TASKS.md's note); harness/tasks/validate_schemas.py only warns, never fails, on a missing resolved_source. Conceptually required on every result file produced from 2026-07-17 onward: a success boolean must always carry HOW it was determined, so a future manually-judged or externally-reported row can never masquerade as harness-verified."
+        },
+        "start_url": {
+          "type": "string",
+          "description": "The fixture/realsite start URL the page navigated to. Absent on an invalid_author row (no script was ever run) or if the scenario's own try block raised before this was set."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "completed", "halted", "paused", "fell_to_model", "timeout",
+            "harness_error", "invalid_author"
+          ],
+          "description": "Raw execution outcome from watch_run()/run_seeded_script(), or invalid_author/harness_error assigned by the caller. Feeds classify() together with expect_pause and checks_ok to produce success/bucket."
+        },
+        "success": {
+          "type": "boolean",
+          "description": "True only when the first valid script reached completed (or paused, for expect_pause goals), every success check passed, and any declared min_steps_executed floor was met (classify(), FIX 2 in task_runner.py)."
+        },
+        "bucket": {
+          "type": ["string", "null"],
+          "enum": [
+            null, "wrong_plan", "halted", "fell_to_model", "pause_unexpected",
+            "timeout", "harness_error", "invalid_author"
+          ],
+          "description": "Null only when success is true. See classify() in task_runner.py and harness/README.md's 'Scoring buckets' paragraph for the full, mutually-exclusive definition of each value, including the FIX 1a go-step reclassification of a genuine product halted into fell_to_model."
+        },
+        "nav_confirms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Count of pendingNav cards approved (Enter pressed) during the run - watch_run()'s nav_confirms counter."
+        },
+        "steps_executed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "watch_run()'s steps_dispatched change-detector count on lastResult - a polling-based floor, not necessarily exact (see harness/README.md's min_steps_executed discussion for known undercounting on fast local pages)."
+        },
+        "run_verdict": {
+          "type": ["object", "null"],
+          "description": "The product's own in-band run verdict from the dev-gated test hook (lastRunVerdict: {name, ok, outcome, stepsTotal, stepIndex}), or null when absent (older extension build, or a run that never reached a verdict emission point). Present as a key only on rows written by run_one_scenario() (absent on invalid_author rows)."
+        },
+        "evidence": {
+          "type": "object",
+          "description": "Free-form diagnostic bundle, shape varies by how the row ended: {final_url, last_result, note} on a normal run_one_scenario() row (note may be null), {note} on an invalid_author row, or {error} on a harness_error row from the outer exception handler.",
+          "additionalProperties": true
+        },
+        "checks": {
+          "type": "array",
+          "description": "Per-check results from evaluate_checks(), one entry per scenario success-check plus, when applicable, one appended min_steps_executed entry (FIX 2). Empty on timeout/harness_error/invalid_author rows.",
+          "items": {
+            "type": "object",
+            "required": ["type", "ok"],
+            "additionalProperties": true,
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "url_contains | text_visible | field_value | min_steps_executed | any unrecognized value passed through from a malformed scenario (evaluate_checks()'s 'unknown check type' branch)."
+              },
+              "ok": {"type": "boolean"}
+            }
+          }
+        },
+        "wall_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wall-clock seconds for this one scenario, rounded to 2 decimals (run_one_scenario()'s finally block)."
+        }
+      }
+    }
+  }
+}
