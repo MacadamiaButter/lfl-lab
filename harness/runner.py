@@ -205,6 +205,62 @@ def seed_dev_hooks(context):
     return sw
 
 
+# Where seed_panel_position() parks the terminal panel: a spot chosen so the
+# ~522px-wide floating panel never overlaps any interactive element of the
+# task-fixture corpus at this harness's real (browser-default) 1280x720
+# viewport - every fixture field/link/button sits left of x~712 and above
+# y~250, so left=744/top=430 clears them all with margin while keeping the
+# whole panel on-screen. Revisit if the corpus or the default viewport
+# changes.
+PANEL_PARK_POS = {"left": 744, "top": 430}
+
+
+def seed_panel_position(sw, pos=None):
+    """Park the terminal panel at a fixed screen position via the product's
+    OWN pin mechanism (chrome.storage.local lflPanelPinned/lflPanelPos, the
+    exact keys terminal.js's popover-redesign pin feature persists - the
+    seeded values are indistinguishable from a human having dragged the
+    panel there and typed `pin`).
+
+    This is a TEST-ENVIRONMENT CONTROL, not a product change and not a
+    weakening of anything: open_terminal() opens the panel with a bare
+    Backquote keypress and no real cursor move, so the panel's cursor-
+    anchored default placement always lands at the same deterministic
+    top-center spot - which, on a short fixture page (signup.html), sits
+    directly on top of real form fields. The product's own occlusion check
+    (axtree.js isTopElement) then correctly excludes those fields from the
+    listing - working as designed, but self-inflicted by the harness's
+    synthetic open. A human user's panel spawns at their actual cursor,
+    which is essentially never dead-center over the field they are about to
+    fill. Parking the panel in a corner makes the harness match that
+    reality. First observed and diagnosed in the L1 handwritten-ceiling-row
+    run - see RESULTS-TASKS.md's human/fixture section, finding 1."""
+    p = pos or PANEL_PARK_POS
+    sw.evaluate(
+        "(pos) => new Promise((resolve) => chrome.storage.local.set("
+        "{lflPanelPinned: true, lflPanelPos: {left: pos.left, top: pos.top}}, resolve))",
+        p,
+    )
+
+
+def clear_panel_position(sw):
+    """Remove the parked-panel keys seed_panel_position() wrote. The Chrome
+    profile (USER_DATA_DIR) persists across runs AND across harnesses - this
+    runner's own P1 battery shares it - so a task-bench run that parks the
+    panel must un-park it on the way out, or the P1 battery's next run (whose
+    occlusion-scenario timing assumes the default cursor-anchored placement)
+    would inherit a pinned panel it never asked for. Best-effort: a crashed
+    run can still leave the keys behind (disclosed in the caller's docs);
+    re-running any cleaning run, or `unpin` typed in any live session,
+    clears them."""
+    try:
+        sw.evaluate(
+            "() => new Promise((resolve) => chrome.storage.local.remove(['lflPanelPinned', 'lflPanelPos'], resolve))"
+        )
+    except Exception:  # noqa: BLE001 - best-effort cleanup only
+        pass
+
+
 def reset_rate_limit_state(sw):
     """Clear the product's per-tab rate-limit budget/pause latch between
     scenarios (the `ratelimit:<tabId>` keys in chrome.storage.session that

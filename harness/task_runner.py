@@ -70,11 +70,13 @@ from runner import (  # noqa: E402  (path insert must happen first)
     PORT_A,
     Navigated,
     check_extension_dir,
+    clear_panel_position,
     ensure_http_server,
     open_terminal,
     read_lfl_state,
     reset_rate_limit_state,
     seed_dev_hooks,
+    seed_panel_position,
     submit_command,
 )
 from runner import USER_DATA_DIR as CHROME_PROFILE_DIR  # noqa: E402
@@ -268,6 +270,7 @@ def watch_run(page, sw, seq0, timeout_s, tier):
     nav_confirms = 0
     steps_dispatched = 0
     last_seen = None
+    run_verdict = None
     deadline = time.monotonic() + timeout_s
     state = None
 
@@ -289,6 +292,16 @@ def watch_run(page, sw, seq0, timeout_s, tier):
 
         if state.get("seq") != seq0:
             started = True
+
+        # The product's own run verdict ({name, ok, outcome, stepsTotal,
+        # stepIndex}), published on the dev-gated test hook at the exact
+        # moment the section-2.3 verdict line is printed (lfl-terminal
+        # a9fef37, the L1 follow-up) - null until the run actually ends, and
+        # absent entirely on an older extension build (both cases leave
+        # run_verdict None here, so every consumer falls back to the polling
+        # counter - see run_one_scenario()'s min_steps_executed block).
+        if state.get("lastRunVerdict") is not None:
+            run_verdict = state.get("lastRunVerdict")
 
         last_result = state.get("lastResult")
         if last_result is not None:
@@ -313,6 +326,7 @@ def watch_run(page, sw, seq0, timeout_s, tier):
                     "state": "fell_to_model",
                     "nav_confirms": nav_confirms,
                     "steps_dispatched": steps_dispatched,
+                    "run_verdict": run_verdict,
                     "last_result": last_result,
                     "final_url": page.url,
                     "note": f"go destination required nav-lane model resolution: {pending_nav.get('url')}",
@@ -324,6 +338,7 @@ def watch_run(page, sw, seq0, timeout_s, tier):
                     "state": "halted",
                     "nav_confirms": nav_confirms,
                     "steps_dispatched": steps_dispatched,
+                    "run_verdict": run_verdict,
                     "last_result": last_result,
                     "final_url": page.url,
                     "note": (
@@ -344,6 +359,7 @@ def watch_run(page, sw, seq0, timeout_s, tier):
                 "state": "fell_to_model",
                 "nav_confirms": nav_confirms,
                 "steps_dispatched": steps_dispatched,
+                "run_verdict": run_verdict,
                 "last_result": last_result,
                 "final_url": page.url,
             }
@@ -358,6 +374,7 @@ def watch_run(page, sw, seq0, timeout_s, tier):
                 "state": "paused",
                 "nav_confirms": nav_confirms,
                 "steps_dispatched": steps_dispatched,
+                "run_verdict": run_verdict,
                 "last_result": last_result,
                 "final_url": page.url,
             }
@@ -371,6 +388,7 @@ def watch_run(page, sw, seq0, timeout_s, tier):
                         "state": "halted",
                         "nav_confirms": nav_confirms,
                         "steps_dispatched": steps_dispatched,
+                        "run_verdict": run_verdict,
                         "last_result": last_result,
                         "final_url": page.url,
                     }
@@ -378,6 +396,7 @@ def watch_run(page, sw, seq0, timeout_s, tier):
                     "state": "completed",
                     "nav_confirms": nav_confirms,
                     "steps_dispatched": steps_dispatched,
+                    "run_verdict": run_verdict,
                     "last_result": last_result,
                     "final_url": page.url,
                 }
@@ -388,6 +407,7 @@ def watch_run(page, sw, seq0, timeout_s, tier):
         "state": "timeout",
         "nav_confirms": nav_confirms,
         "steps_dispatched": steps_dispatched,
+        "run_verdict": run_verdict,
         "last_result": state.get("lastResult") if state else None,
         "final_url": page.url,
     }
@@ -627,6 +647,11 @@ def run_one_scenario(context, sw, scenario, body, timeout_s_override=None, go_re
         row["state"] = run_result["state"]
         row["nav_confirms"] = run_result["nav_confirms"]
         row["steps_executed"] = run_result["steps_dispatched"]
+        # The product's own in-band verdict (dev-gated test hook, lfl-terminal
+        # a9fef37) - recorded on every row so in-band-vs-harness agreement is
+        # directly auditable from the raw JSON; None on an older extension
+        # build or a run that never reached a verdict emission point.
+        row["run_verdict"] = run_result.get("run_verdict")
         row["evidence"] = {
             "final_url": run_result.get("final_url"),
             "last_result": run_result.get("last_result"),
@@ -668,16 +693,40 @@ def run_one_scenario(context, sw, scenario, body, timeout_s_override=None, go_re
         # otherwise-successful row to wrong_plan, even though the end-state
         # checks passed - see task-scenarios.json's shop-open-item-back-to-products
         # and README's task-success section for the field's documentation.
+        #
+        # Verdict-informed floor (L1 follow-up, 2026-07-18): the polling
+        # counter provably undercounts on fast local pages (a fully-passing
+        # 11-step recipe observed steps_executed=1 - see RESULTS-TASKS.md's
+        # human/fixture finding 2), so when the product's OWN run verdict is
+        # available (dev-gated test hook, lfl-terminal a9fef37) and reports
+        # outcome "ok", its stepsTotal - the count the product itself
+        # executed and printed in `run <name>: OK (N steps)` - is preferred
+        # as the floor's step count. The polling counter remains the
+        # fallback whenever the verdict is absent (older extension build, or
+        # a run that ended without reaching a verdict emission point).
         min_steps = scenario.get("min_steps_executed")
-        if success and isinstance(min_steps, int) and row["steps_executed"] < min_steps:
-            success = False
-            bucket = "wrong_plan"
-            row["checks"].append({
-                "type": "min_steps_executed",
-                "value": min_steps,
-                "observed": row["steps_executed"],
-                "ok": False,
-            })
+        if success and isinstance(min_steps, int):
+            verdict = row.get("run_verdict")
+            if (
+                verdict
+                and verdict.get("outcome") == "ok"
+                and isinstance(verdict.get("stepsTotal"), int)
+            ):
+                floor_observed = verdict["stepsTotal"]
+                floor_source = "run_verdict.stepsTotal"
+            else:
+                floor_observed = row["steps_executed"]
+                floor_source = "steps_executed_poll"
+            if floor_observed < min_steps:
+                success = False
+                bucket = "wrong_plan"
+                row["checks"].append({
+                    "type": "min_steps_executed",
+                    "value": min_steps,
+                    "observed": floor_observed,
+                    "source": floor_source,
+                    "ok": False,
+                })
 
         row["success"] = success
         row["bucket"] = bucket
@@ -752,29 +801,43 @@ def main():
                 ],
             )
             sw = seed_dev_hooks(context)
+            # Park the terminal panel out of the fixture pages' content area
+            # (test-environment control, not a product change - see
+            # seed_panel_position()'s docstring in runner.py for the L1
+            # occlusion finding this closes). Seeded once per run, before any
+            # page exists, via the product's own pin mechanism, and un-parked
+            # in the finally below (the Chrome profile persists across runs
+            # and is shared with runner.py's P1 battery, whose occlusion
+            # scenario assumes the default cursor-anchored placement; a
+            # crashed run can still leave the keys behind - re-running to
+            # completion, or `unpin` typed in any live session, clears them).
+            seed_panel_position(sw)
             go_resolve_cache = {}  # shared across scenarios within this run - see resolve_go_arg()
 
-            for i, scenario in enumerate(scenarios, start=1):
-                goal_id = scenario["id"]
-                entry = goals.get(goal_id)
-                body = entry.get("first_valid_body") if entry else None
-                if not body:
-                    row = {
-                        "id": goal_id, "tier": scenario.get("tier"),
-                        "expect_pause": bool(scenario.get("expect_pause")),
-                        "state": "invalid_author", "success": False, "bucket": "invalid_author",
-                        "nav_confirms": 0, "steps_executed": 0, "checks": [], "wall_s": 0.0,
-                        "evidence": {"note": "no validator-passing script from Phase A for this goal"},
-                    }
-                    results.append(row)
-                    print(f"[{i:02d}/{len(scenarios)}] {goal_id:36s} -> invalid_author (no authored script)")
-                    continue
+            try:
+                for i, scenario in enumerate(scenarios, start=1):
+                    goal_id = scenario["id"]
+                    entry = goals.get(goal_id)
+                    body = entry.get("first_valid_body") if entry else None
+                    if not body:
+                        row = {
+                            "id": goal_id, "tier": scenario.get("tier"),
+                            "expect_pause": bool(scenario.get("expect_pause")),
+                            "state": "invalid_author", "success": False, "bucket": "invalid_author",
+                            "nav_confirms": 0, "steps_executed": 0, "checks": [], "wall_s": 0.0,
+                            "evidence": {"note": "no validator-passing script from Phase A for this goal"},
+                        }
+                        results.append(row)
+                        print(f"[{i:02d}/{len(scenarios)}] {goal_id:36s} -> invalid_author (no authored script)")
+                        continue
 
-                reset_rate_limit_state(sw)
-                row = run_one_scenario(context, sw, scenario, body, go_resolve_cache=go_resolve_cache)
-                results.append(row)
-                status = "SUCCESS" if row.get("success") else f"FAIL({row.get('bucket')})"
-                print(f"[{i:02d}/{len(scenarios)}] {goal_id:36s} -> {status}  (state={row.get('state')}, nav_confirms={row.get('nav_confirms')}, steps={row.get('steps_executed')}, {row.get('wall_s')}s)")
+                    reset_rate_limit_state(sw)
+                    row = run_one_scenario(context, sw, scenario, body, go_resolve_cache=go_resolve_cache)
+                    results.append(row)
+                    status = "SUCCESS" if row.get("success") else f"FAIL({row.get('bucket')})"
+                    print(f"[{i:02d}/{len(scenarios)}] {goal_id:36s} -> {status}  (state={row.get('state')}, nav_confirms={row.get('nav_confirms')}, steps={row.get('steps_executed')}, {row.get('wall_s')}s)")
+            finally:
+                clear_panel_position(sw)
 
             context.close()
     finally:

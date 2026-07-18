@@ -381,31 +381,42 @@ runs, not invented):
 Design doc: `LFL-TERMINAL-RECIPES-THAT-SUCCEED-DESIGN.md` section 6, item L1
 (2026-07-17). This is the fifth row the design doc asks for: 14 hand-authored
 reference recipes, one per fixture goal, using the `expect`/`wait` vocabulary
-added by `lfl-terminal` commit **`b348d03`** (a **local, unpushed** build - 3
-commits ahead of `origin/main`; `lfl-terminal`'s working tree stayed
-byte-identical throughout this work, verified with `git status` before and
-after). Recipes are committed at `harness/tasks/human-recipes.json`
-(rationale-commented, one script body per goal, `{PORT}` templated); the thin
-adapter `harness/tasks/build_human_authored.py` validates every body against
-the REAL `parseScriptBody()` (via `brainstorm/probe.py`'s `validate_body()`,
-the same validator `author_tasks.py`'s model-authored scripts go through)
-and writes an authored-shaped JSON so **`harness/task_runner.py` runs
-completely unmodified** - no fork, no duplicated seeding/driving/scoring
-logic. Reproduce with:
+the "recipes that succeed" milestone added. Recipes are committed at
+`harness/tasks/human-recipes.json` (rationale-commented, one script body per
+goal, `{PORT}` templated); the thin adapter
+`harness/tasks/build_human_authored.py` validates every body against the
+REAL `parseScriptBody()` (via `brainstorm/probe.py`'s `validate_body()`, the
+same validator `author_tasks.py`'s model-authored scripts go through) and
+writes an authored-shaped JSON that `harness/task_runner.py`'s existing
+seeding/driving/scoring pipeline consumes - no fork, no duplicated logic.
+Reproduce with:
 
 ```
 python3 harness/tasks/build_human_authored.py
 python3 harness/task_runner.py --tier fixture --authored harness/results/authored-human-<ts>.json
 ```
 
-Two full passes, same authored JSON, same build, both headed (`DISPLAY=:0`,
+This row ran in TWO ROUNDS the same night. **Round 1** (extension loaded
+from `lfl-terminal` commit `b348d03`, a local unpushed build; the product
+repo stayed byte-untouched during the lab work): **12/14, twice**,
+surfacing two real findings, documented in full below. **Round 2** (after
+the milestone owner approved targeted fixes for both findings - one
+harness-side test-environment control, one small dev-hook-only product
+change, one harness scoring change - extension at `lfl-terminal`
+**`a9fef37`**, also local and unpushed): **14/14, twice, byte-identical
+rows both passes** - the design doc's own section 8 gate for L1 is met.
+The recipe bodies themselves are byte-identical across both rounds
+(`human-recipes.json` untouched between them): neither miss was fixed by
+tweaking a recipe, per the design doc's rule that a miss is data about the
+engine/harness, never something to script around.
+
+### Round 1 (lfl-terminal b348d03): 12/14 twice, two real findings
+
+Two full passes, same authored JSON, both headed (`DISPLAY=:0`,
 `LFL_LAB_HEADED=1`): **12/14 both passes, byte-identical bucket assignment
 per goal both times** (raw: `tasks-run-human-20260718T015448Z.json`,
 `tasks-run-human-20260718T020037Z.json`, both gitignored, regenerate with
-the commands above). Target was 14/14; the 2 misses are real, reproduced,
-and NOT worked around - the recipes were not tweaked to dodge either one,
-per the design doc's own rule that a miss here is data about the engine/
-harness, not something to script around.
+the commands above).
 
 | goal id | pass 1 | pass 2 | in-band (`expect`) vs harness check |
 | --- | --- | --- | --- |
@@ -471,14 +482,13 @@ that would have burned a real `:1238`/`:1241` call. **This is a real,
 reproducible product/harness interaction worth a bug report**: a headless-
 or synthetic-input test driver that opens the terminal with no real cursor
 position gets a deterministic panel placement that can occlude nearby page
-content on a short page, with no in-script recourse. Whether the right fix
-lives in the product (a smarter default anchor, or a scriptable
-reposition command) or only in test-harness conventions (move the mouse
-before pressing the hotkey) is an open question, not resolved here.
+content on a short page, with no in-script recourse.
 `signup-contact-pause`/`signup-newsletter-pause` on the SAME page/panel
 position succeeded only because Name/Email sit above the panel's occluded
 band; this is page-content-position-dependent, not something the other two
-signup goals happened to avoid on merit.
+signup goals happened to avoid on merit. RESOLVED for round 2 by a
+harness-side test-environment control (see "Fixes between rounds" below) -
+the product was judged to be working as designed here.
 
 **Finding 2 - `shop-open-item-back-to-products`, real DISAGREEMENT: the
 product's own in-band verdict says OK, the harness's own scoring says
@@ -530,22 +540,116 @@ designed; the harness's own `min_steps_executed` floor (necessary to catch
 genuinely-degenerate scripts, see "Correction" above) is the thing that
 misfires here. No recipe change fixes this without adding steps whose only
 purpose is to survive the poll - explicitly the kind of check-gaming the
-task rules for this build ruled out, so it is reported here instead, not
-patched around.
+task rules for this build ruled out, so it was reported instead, not
+patched around. RESOLVED for round 2 by exposing the product's own verdict
+on the dev-gated test hook and making the floor verdict-informed (see
+"Fixes between rounds" below).
+
+### Fixes between rounds (owner-approved, 2026-07-18)
+
+Three targeted fixes, one per layer, none of them recipe changes:
+
+1. **Harness test-environment control (finding 1):** `harness/runner.py`
+   gains `seed_panel_position()`/`clear_panel_position()` - before any page
+   opens, `task_runner.py` now parks the terminal panel at a fixed corner
+   (`left:744, top:430` at the browser-default 1280x720 viewport, clear of
+   every fixture page's interactive content) by seeding the product's OWN
+   pin mechanism (`chrome.storage.local` `lflPanelPinned`/`lflPanelPos`,
+   the exact keys a human's drag-then-`pin` persists), and un-parks it when
+   the run ends (the Chrome profile is shared with `runner.py`'s P1
+   battery, whose occlusion scenario assumes the default placement). This
+   is a test-environment control, not a product change: it makes the
+   synthetic-input harness match the reality that a human's panel spawns at
+   their actual cursor, essentially never dead-center over the field they
+   are about to fill. Verified with the same debug driver as the original
+   finding: with the panel parked, `elementFromPoint` at the Message
+   textarea's center returns the `<textarea>` itself with the terminal
+   open, and `ls fields` lists all three signup fields.
+2. **Product change, dev-hook only (finding 2):** `lfl-terminal` commit
+   **`a9fef37`** (local, unpushed; `terminal.js` + `tests/
+   m6_expect_wait.test.js` only) exposes `lastRunVerdict` (`{name, ok,
+   outcome, stepsTotal, stepIndex}` or null) on the SAME dev-flag-gated
+   `data-lfl-state` test hook as `lastResult` - set at exactly the four
+   places the §2.3 verdict is already emitted (`_afterSettle` ok/fail, the
+   arrival-mismatch halt, the pause path), reset when a new run is
+   approved. Nothing is exposed when dev hooks are off (the field lives
+   inside the one payload the existing H2 `_devHooksEnabled` early-return
+   guards); no new storage key; counters-only by construction (never the
+   diagnostic string, never a compared/page-read value - same audit rule as
+   `b348d03`). Locked files (guards/executor/nav-watch/nav/axtree/
+   service-worker/manifest) byte-identical; all 26 Node suites green
+   (95/95 checks in the m6 suite, including 6 new structural checks for
+   this field); egress/leaks/emdash gates PASS.
+3. **Harness scoring change (finding 2, consumer side):**
+   `task_runner.py`'s `watch_run()` now records the hook's `lastRunVerdict`
+   on every row (`run_verdict` in the raw JSON, None on an older extension
+   build), and the `min_steps_executed` floor prefers
+   `run_verdict.stepsTotal` when the verdict reports `outcome: "ok"` - the
+   product's own executed-step count, the same N printed in
+   `run <name>: OK (N steps)` - falling back to the 150ms polling counter
+   only when the verdict is absent. The floor's `checks` entry now records
+   which source it used (`source: "run_verdict.stepsTotal" |
+   "steps_executed_poll"`).
+
+### Round 2 (lfl-terminal a9fef37): 14/14 twice - the L1 gate is met
+
+Fresh authored JSON (`authored-human-20260718T021533Z.json`, same recipe
+bodies), two full headed passes: **14/14 both passes**
+(`tasks-run-human-20260718T021558Z.json`,
+`tasks-run-human-20260718T021631Z.json`, both gitignored). Every row's
+`success`, `bucket`, AND `run_verdict` fields are identical across the two
+passes.
+
+| goal id | pass 1 | pass 2 | product's own verdict (both passes) |
+| --- | --- | --- | --- |
+| shop-open-blue-widget | SUCCESS | SUCCESS | ok, 7/7 steps |
+| shop-open-red-gadget | SUCCESS | SUCCESS | ok, 7/7 steps |
+| shop-open-green-gizmo | SUCCESS | SUCCESS | ok, 7/7 steps |
+| shop-open-yellow-widget | SUCCESS | SUCCESS | ok, 7/7 steps |
+| shop-search-open-blue | SUCCESS | SUCCESS | ok, 10/10 steps |
+| shop-search-open-red | SUCCESS | SUCCESS | ok, 10/10 steps |
+| shop-search-open-green | SUCCESS | SUCCESS | ok, 10/10 steps |
+| shop-search-third-pause | SUCCESS (paused) | SUCCESS (paused) | paused at 8/8 |
+| signup-contact-pause | SUCCESS (paused) | SUCCESS (paused) | paused at 7/7 |
+| signup-newsletter-pause | SUCCESS (paused) | SUCCESS (paused) | paused at 5/5 |
+| signup-message-pause | SUCCESS (paused) | SUCCESS (paused) | paused at 5/5 |
+| shop-scroll-item | SUCCESS | SUCCESS | ok, 7/7 steps |
+| shop-open-item-back-to-products | SUCCESS | SUCCESS | ok, 11/11 steps |
+| shop-open-signup | SUCCESS | SUCCESS | ok, 5/5 steps |
+
+In-band vs harness agreement is now three-way on every row: the recipe's
+own `expect` steps all passed (a failed expect would have halted the run),
+the product's `lastRunVerdict` reports the outcome the goal expects (`ok`
+for run-to-completion goals, `paused` for the four `expect_pause` goals),
+and every harness-side success check passed. Zero disagreements. The
+verdict-informed floor is confirmed live by
+`shop-open-item-back-to-products`: the raw JSON still shows the polling
+counter undercounting (`steps_executed: 1`) while `run_verdict.stepsTotal:
+11` satisfies the `min_steps_executed: 3` floor - under the old
+poll-counter-only floor this row would STILL have been wrongly demoted,
+i.e. the fix, not luck or timing, is what closed it.
 
 **Honesty notes:**
-- Both findings were reproduced with throwaway, uncommitted debug drivers
-  built on top of `harness/runner.py`'s own already-reviewed helpers
-  (`open_terminal`, `read_lfl_state`, `seed_dev_hooks`, `submit_command`) -
-  no new browser-automation technique, no change to `runner.py` or
-  `task_runner.py` itself. Screenshots were taken to `/tmp` (not committed;
-  not part of this repo) purely to visually confirm the panel-occlusion
-  geometry and the verdict-line text quoted above.
+- Round 1's findings were reproduced with throwaway, uncommitted debug
+  drivers built on top of `harness/runner.py`'s own already-reviewed
+  helpers (`open_terminal`, `read_lfl_state`, `seed_dev_hooks`,
+  `submit_command`) - no new browser-automation technique, and (in round 1)
+  no change to `runner.py` or `task_runner.py` themselves. The round-2
+  changes to both files are exactly the ones itemized in "Fixes between
+  rounds". Screenshots were taken to `/tmp` (not committed; not part of
+  this repo) purely to visually confirm the panel-occlusion geometry and
+  the verdict-line text quoted above.
 - `steps_executed`/`min_steps_executed` currently only guards ONE scenario
-  (`shop-open-item-back-to-products`); this finding does not, by itself,
+  (`shop-open-item-back-to-products`); finding 2 does not, by itself,
   imply the other 13 goals' checks are unreliable - none of the other 13
   declare a `min_steps_executed` floor, so none of them are exposed to this
   specific undercount mechanism regardless of how fast they execute.
+- The parked-panel keys are removed in a `finally` at the end of every
+  `task_runner.py` run; a crashed run can still leave them in the shared
+  Chrome profile (`.chrome-profile/`, gitignored), which would carry a
+  pinned panel into the next P1-battery run - disclosed here rather than
+  silently possible; any completed task run, or `unpin` typed in a live
+  session, clears them.
 - The corpus HTTP server (`python3 -m http.server 8977`) was verified
   stopped (`ss -ltnp | grep 8977` empty) after every run in this section,
   including the throwaway debug drivers, each of which used

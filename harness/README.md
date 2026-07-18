@@ -335,14 +335,39 @@ gameable: a degenerate script can reach the right final page/DOM state by a
 shortcut the goal text never asked for (see `harness/RESULTS-TASKS.md`'s
 LIMITATIONS for a live example on `shop-open-item-back-to-products`). If a
 scenario sets `"min_steps_executed": <int>`, `task_runner.py` enforces it at
-scoring time: an otherwise-passing row whose `steps_executed` is below that
-floor is demoted to `success=false, bucket="wrong_plan"`, with a
+scoring time: an otherwise-passing row whose observed step count is below
+that floor is demoted to `success=false, bucket="wrong_plan"`, with a
 `{"type": "min_steps_executed", ...}` entry appended to `checks` recording
-the floor and the observed count. This is a floor, not a real path-shape
-check, and is subject to the same `steps_executed` undercounting the
-LIMITATIONS section already documents (a script that DID take enough steps
-can still under-report `steps_executed` due to the `lastResult` reset on
-navigation) - set the floor conservatively for that reason.
+the floor, the observed count, and which source supplied it. **The floor
+is verdict-informed since 2026-07-18**: when the extension under test
+exposes `lastRunVerdict` on the dev-gated test hook (the L1 follow-up
+product change) and it reports `outcome: "ok"`, its `stepsTotal` - the
+product's OWN executed-step count, the same N printed in
+`run <name>: OK (N steps)` - is preferred
+(`"source": "run_verdict.stepsTotal"`); the 150ms polling change-detector
+remains the fallback (`"source": "steps_executed_poll"`) on an older
+extension build or a run that ended without reaching a verdict. This is a
+floor, not a real path-shape check, and the FALLBACK counter is subject to
+the `steps_executed` undercounting the LIMITATIONS section documents (a
+script that DID take enough steps can still under-report due to the
+`lastResult` reset on navigation, and a fast fully-local page can outrun
+the poll entirely - see RESULTS-TASKS.md's human/fixture finding 2 for a
+live 11-step recipe that polled as 1) - set the floor conservatively for
+that reason.
+
+**Panel parking (test-environment control).** `task_runner.py` parks the
+terminal panel in a screen corner for the whole run
+(`seed_panel_position()` in `runner.py`, seeding the product's own
+`lflPanelPinned`/`lflPanelPos` pin keys; un-parked in a `finally` at run
+end because the Chrome profile is shared with the P1 battery). Reason: the
+harness opens the panel with a synthetic Backquote and no real cursor
+move, so the default cursor-anchored placement always lands at the same
+deterministic spot - which on a short fixture page sat directly on top of
+real form fields, and the product's own occlusion check then (correctly)
+refused to list them. A human's panel spawns at their actual cursor;
+parking makes the harness match that reality instead of fighting the
+product's occlusion protection. See RESULTS-TASKS.md's human/fixture
+finding 1 for the full diagnosis.
 
 **go-step pre-classification (`harness/tasks/resolve_go.js`).** Before each
 run, `task_runner.py` shells out to `resolve_go.js` - a thin shim that
@@ -411,13 +436,16 @@ python3 harness/tasks/build_human_authored.py
 python3 harness/task_runner.py --tier fixture --authored harness/results/authored-human-<ts>.json
 ```
 
-See `RESULTS-TASKS.md`'s "human / fixture" section for the numbers (2 full
-passes, 12/14 both times, byte-identical bucket assignment) and two real,
-reproduced, screenshotted findings this row surfaced - a page/panel
-occlusion interaction (`signup-message-pause`) and a genuine disagreement
-between the product's own in-band `run ...: OK` verdict and the harness's
-`min_steps_executed` scoring (`shop-open-item-back-to-products`) - neither
-one was worked around by tweaking the recipes.
+See `RESULTS-TASKS.md`'s "human / fixture" section for the full story: an
+initial round scored 12/14 (twice, byte-identical), surfacing two real,
+reproduced, screenshotted findings - a page/panel occlusion interaction
+(`signup-message-pause`) and a genuine disagreement between the product's
+own in-band `run ...: OK` verdict and the harness's `min_steps_executed`
+scoring (`shop-open-item-back-to-products`). Neither was worked around by
+tweaking a recipe; after owner-approved fixes (the panel-parking control
+and the verdict-informed floor above, plus the product's dev-hook
+`lastRunVerdict` field), the final result is **14/14, twice,
+byte-identical rows** - the design doc's L1 gate.
 
 ## Honesty notes for whoever verifies this next
 
