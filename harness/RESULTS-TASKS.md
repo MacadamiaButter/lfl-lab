@@ -376,6 +376,182 @@ runs, not invented):
   `{"type": "min_steps_executed", "value": 3, "observed": 0, "ok": false}`
   entry appended to `checks`.
 
+## human / fixture (L1 handwritten ceiling row, 2026-07-17/18)
+
+Design doc: `LFL-TERMINAL-RECIPES-THAT-SUCCEED-DESIGN.md` section 6, item L1
+(2026-07-17). This is the fifth row the design doc asks for: 14 hand-authored
+reference recipes, one per fixture goal, using the `expect`/`wait` vocabulary
+added by `lfl-terminal` commit **`b348d03`** (a **local, unpushed** build - 3
+commits ahead of `origin/main`; `lfl-terminal`'s working tree stayed
+byte-identical throughout this work, verified with `git status` before and
+after). Recipes are committed at `harness/tasks/human-recipes.json`
+(rationale-commented, one script body per goal, `{PORT}` templated); the thin
+adapter `harness/tasks/build_human_authored.py` validates every body against
+the REAL `parseScriptBody()` (via `brainstorm/probe.py`'s `validate_body()`,
+the same validator `author_tasks.py`'s model-authored scripts go through)
+and writes an authored-shaped JSON so **`harness/task_runner.py` runs
+completely unmodified** - no fork, no duplicated seeding/driving/scoring
+logic. Reproduce with:
+
+```
+python3 harness/tasks/build_human_authored.py
+python3 harness/task_runner.py --tier fixture --authored harness/results/authored-human-<ts>.json
+```
+
+Two full passes, same authored JSON, same build, both headed (`DISPLAY=:0`,
+`LFL_LAB_HEADED=1`): **12/14 both passes, byte-identical bucket assignment
+per goal both times** (raw: `tasks-run-human-20260718T015448Z.json`,
+`tasks-run-human-20260718T020037Z.json`, both gitignored, regenerate with
+the commands above). Target was 14/14; the 2 misses are real, reproduced,
+and NOT worked around - the recipes were not tweaked to dodge either one,
+per the design doc's own rule that a miss here is data about the engine/
+harness, not something to script around.
+
+| goal id | pass 1 | pass 2 | in-band (`expect`) vs harness check |
+| --- | --- | --- | --- |
+| shop-open-blue-widget | SUCCESS | SUCCESS | agree |
+| shop-open-red-gadget | SUCCESS | SUCCESS | agree |
+| shop-open-green-gizmo | SUCCESS | SUCCESS | agree |
+| shop-open-yellow-widget | SUCCESS | SUCCESS | agree |
+| shop-search-open-blue | SUCCESS | SUCCESS | agree |
+| shop-search-open-red | SUCCESS | SUCCESS | agree |
+| shop-search-open-green | SUCCESS | SUCCESS | agree |
+| shop-search-third-pause | SUCCESS (paused) | SUCCESS (paused) | agree |
+| signup-contact-pause | SUCCESS (paused) | SUCCESS (paused) | agree |
+| signup-newsletter-pause | SUCCESS (paused) | SUCCESS (paused) | agree |
+| signup-message-pause | **halted** | **halted** | agree (both FAIL) - see finding 1 |
+| shop-scroll-item | SUCCESS | SUCCESS | agree |
+| shop-open-item-back-to-products | **wrong_plan** | **wrong_plan** | **DISAGREE** - see finding 2 |
+| shop-open-signup | SUCCESS | SUCCESS | agree |
+
+`task_success: 12/14` both passes (`n_rated=14`, `n_harness_error=0`).
+"agree/disagree" compares two independently-computed verdicts for the same
+run: the harness's own Python-side `checks` (`url_contains`/`text_visible`/
+`field_value`, run against the live page from outside the extension) vs the
+product's own in-product `expect` steps (evaluated inside the page by the
+real `evalExpect()`/`extractExpectFacts()` this milestone shipped). For the
+12 successes every `expect` step in the recipe passed and every harness
+check passed - full agreement, both ways of asking "did this work" say yes.
+The 2 misses are NOT the same kind of finding and are reported separately:
+
+**Finding 1 - `signup-message-pause`, real engine/UI interaction, halted,
+both verdicts agree it failed (agreement on FAIL, not a disagreement).**
+`fill "Message" with "..."` and the following `expect field "Message"
+equals "..."` both report `no fillable field matching "Message"`, and the
+harness's own `field_value` check on `#signup-message` independently
+observes `""` - both sides genuinely see no value ever landed, so this is
+not an expect-vs-harness disagreement. Root cause, isolated with a
+throwaway debug driver (not committed) reusing `harness/runner.py`'s own
+`open_terminal`/`read_lfl_state`/`seed_dev_hooks` helpers, screenshotted for
+evidence: `harness/runner.py`'s `open_terminal()` opens the panel with a
+bare `Backquote` keypress and no real cursor move, so the panel always
+anchors at the SAME fixed on-screen position (`position:fixed`, measured
+`top:122 left:380 width:522 height:88` in this run). On `signup.html` at
+this harness's real (unset, so browser-default) `1280x720` viewport, that
+position sits directly on top of the Message textarea and the Submit
+button - confirmed by evaluating `elementFromPoint` at the textarea's own
+center coordinates both before (`<textarea>`) and after (`lfl-terminal-host`
+div) the terminal opens. `axtree.js`'s `isTopElement()` occlusion check -
+the SAME mechanism that protects the approval card from a page-owned
+overlay covering it (`adversarial-occlusion-covers-approval` in
+`harness/scenarios.json`) - correctly excludes an occluded element from the
+fillable-fields listing; it is working exactly as designed, just colliding
+with its own panel here. **No script verb can recover from this**: `click`/
+`fill <N>` by index is banned by the same index-address rule this whole
+milestone's `pause` primitive exists to route around, and `scroll down`
+(tried explicitly) is a no-op on this page - `signup.html`'s content is
+shorter than the 720px viewport, so there is nothing to scroll, and the
+panel's `position:fixed` on-screen rectangle does not move with page
+scroll regardless. Repositioning the panel (`config anchor dock`, `pin`)
+is TYPED-command-only per the design doc's own dispatch table (falls
+through to the page-lane model as an unrecognized segment if attempted
+inside a script/chain) - not script-legal, confirmed by reading
+`terminal.js`'s dispatch comments before trying it, not by trial and error
+that would have burned a real `:1238`/`:1241` call. **This is a real,
+reproducible product/harness interaction worth a bug report**: a headless-
+or synthetic-input test driver that opens the terminal with no real cursor
+position gets a deterministic panel placement that can occlude nearby page
+content on a short page, with no in-script recourse. Whether the right fix
+lives in the product (a smarter default anchor, or a scriptable
+reposition command) or only in test-harness conventions (move the mouse
+before pressing the hotkey) is an open question, not resolved here.
+`signup-contact-pause`/`signup-newsletter-pause` on the SAME page/panel
+position succeeded only because Name/Email sit above the panel's occluded
+band; this is page-content-position-dependent, not something the other two
+signup goals happened to avoid on merit.
+
+**Finding 2 - `shop-open-item-back-to-products`, real DISAGREEMENT: the
+product's own in-band verdict says OK, the harness's own scoring says
+`wrong_plan`.** The run reaches `completed`; both of the goal's REAL
+success checks pass (`url_contains products.html: true`, `text_visible
+PRODUCTS-LIST-MARKER: true`). It is demoted to `wrong_plan` only by the
+scenario's own `min_steps_executed: 3` floor (a `harness/task_runner.py`
+addition, not a product feature - see "Correction"/LIMITATIONS above),
+because `steps_executed` (the harness's external 150ms-poll change-detector
+on `lastResult`) recorded only **1** step for an 11-step recipe that
+genuinely executed every step (`go`, 3x `open`, 3x `wait for heading`, 4x
+`expect`) - confirmed with a throwaway single-scenario debug driver
+(not committed) that seeded the identical script and screenshotted the
+terminal's own scrollback at completion:
+
+```
+lfl> wait for heading "Products"
+wait for heading "Products": OK (0s)
+lfl> expect url contains "products.html"
+expect url contains "products.html": OK
+lfl> expect text "PRODUCTS-LIST-MARKER"
+expect text "PRODUCTS-LIST-MARKER": OK
+run backtest: OK (11 steps)
+```
+
+The product's own `run ...: OK (11 steps)` verdict line (this milestone's
+own §2.3 feature) plainly disagrees with the harness's `wrong_plan` bucket
+for the exact same run - a genuine, screenshotted disagreement between the
+in-band verdict and the harness-side scoring, exactly the kind §6's own
+bench-mechanics note asks to be surfaced. Diagnosis: `run ...: OK (N
+steps)` is printed via `printOk()` (scrollback only) and never re-invokes
+`_settle()`, so it never updates `state.lastResult` - the one field
+`data-lfl-state` (the test hook `harness/runner.py`'s `read_lfl_state()`
+reads) exposes. The harness's polling-based `steps_dispatched` counter can
+therefore never observe the verdict line at all, and - separately - a fully
+local, already-rendered fixture page runs an entire multi-step recipe fast
+enough that even the 10 REAL intermediate step results can pass by between
+150ms polls without ever being the freshest `lastResult` a poll happens to
+catch (this recipe deliberately inserted an `expect` after every navigation
+specifically to fight this, per its own rationale comment - it still was
+not enough). This reproduces and sharpens the exact `steps_executed`
+undercount limitation `harness/README.md` and this document's own
+LIMITATIONS section already disclose, now shown to affect a real, correctly
+long, fully-passing recipe, not only the degenerate 1-step probe the R3
+smoke used. **This is a `harness/task_runner.py` instrumentation
+limitation, not an `lfl-terminal` product bug** - the product's own
+`expect`/`run`-verdict vocabulary this milestone shipped worked exactly as
+designed; the harness's own `min_steps_executed` floor (necessary to catch
+genuinely-degenerate scripts, see "Correction" above) is the thing that
+misfires here. No recipe change fixes this without adding steps whose only
+purpose is to survive the poll - explicitly the kind of check-gaming the
+task rules for this build ruled out, so it is reported here instead, not
+patched around.
+
+**Honesty notes:**
+- Both findings were reproduced with throwaway, uncommitted debug drivers
+  built on top of `harness/runner.py`'s own already-reviewed helpers
+  (`open_terminal`, `read_lfl_state`, `seed_dev_hooks`, `submit_command`) -
+  no new browser-automation technique, no change to `runner.py` or
+  `task_runner.py` itself. Screenshots were taken to `/tmp` (not committed;
+  not part of this repo) purely to visually confirm the panel-occlusion
+  geometry and the verdict-line text quoted above.
+- `steps_executed`/`min_steps_executed` currently only guards ONE scenario
+  (`shop-open-item-back-to-products`); this finding does not, by itself,
+  imply the other 13 goals' checks are unreliable - none of the other 13
+  declare a `min_steps_executed` floor, so none of them are exposed to this
+  specific undercount mechanism regardless of how fast they execute.
+- The corpus HTTP server (`python3 -m http.server 8977`) was verified
+  stopped (`ss -ltnp | grep 8977` empty) after every run in this section,
+  including the throwaway debug drivers, each of which used
+  `ensure_http_server()`'s own PID-tracked start/`proc.terminate()` stop -
+  no `pkill -f` was used anywhere in this work.
+
 ## LIMITATIONS (read this as part of the result)
 
 - **Goals encode visible labels.** Every goal names the visible link

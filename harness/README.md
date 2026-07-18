@@ -81,6 +81,13 @@ harness/
                           see "Task-success bench" below
     resolve_go.js         go-step pre-classification shim - see
                           "go-step pre-classification" below
+    human-recipes.json    L1 hand-authored reference recipes (one per fixture
+                          goal, rationale-commented, expect/wait vocabulary) -
+                          see "Task-success bench" below and RESULTS-TASKS.md's
+                          "human / fixture" section
+    build_human_authored.py  thin adapter: validates human-recipes.json against
+                          the real parseScriptBody() and reshapes it into an
+                          authored-*.json task_runner.py consumes unmodified
   runner.py          the driver (see header docstring for full detail)
   author_tasks.py    task-success bench Phase A (AUTHOR) - see below
   task_runner.py     task-success bench Phase B (EXECUTE) - see below
@@ -389,6 +396,28 @@ which was inherited from `brainstorm/probe.py`'s own `strict`/`naive`
 variant prompt (unrelated to the product, predates the shipped payload
 existing); `author_tasks.py` only ever uses the `shipped` variant, so every
 number this bench reports is at the product's real, pinned `0.1`.
+
+**Human / fixture (L1, the handwritten ceiling row).** `harness/tasks/
+human-recipes.json` is 14 hand-authored reference scripts (one per fixture
+goal), using the `expect`/`wait` vocabulary `lfl-terminal` added in the
+"recipes that succeed" milestone. `harness/tasks/build_human_authored.py`
+validates every body against the real `parseScriptBody()` and reshapes the
+file into an `authored-human-<ts>.json` that `task_runner.py` consumes
+completely unmodified - same `--authored` flag, same Phase B pipeline as
+a model-authored run:
+
+```
+python3 harness/tasks/build_human_authored.py
+python3 harness/task_runner.py --tier fixture --authored harness/results/authored-human-<ts>.json
+```
+
+See `RESULTS-TASKS.md`'s "human / fixture" section for the numbers (2 full
+passes, 12/14 both times, byte-identical bucket assignment) and two real,
+reproduced, screenshotted findings this row surfaced - a page/panel
+occlusion interaction (`signup-message-pause`) and a genuine disagreement
+between the product's own in-band `run ...: OK` verdict and the harness's
+`min_steps_executed` scoring (`shop-open-item-back-to-products`) - neither
+one was worked around by tweaking the recipes.
 
 ## Honesty notes for whoever verifies this next
 

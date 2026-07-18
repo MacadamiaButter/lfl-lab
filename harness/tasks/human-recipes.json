@@ -1,0 +1,47 @@
+{
+  "_comment": "L1 'handwritten ceiling row' (LFL-TERMINAL-RECIPES-THAT-SUCCEED-DESIGN.md section 6): hand-authored reference scripts for all 14 fixture goals in task-scenarios.json, using the expect/wait vocabulary added by lfl-terminal commit b348d03. Each body's own leading '#' comment line is its one-line rationale (parseScriptBody strips '#'-prefixed lines, so it never counts as a step). Every 'expect' step deliberately mirrors one of the goal's own harness-side success checks (url_contains -> expect url contains, text_visible -> expect text, field_value -> expect field ... equals), so a real run reports two independent verdicts (harness-side Python check vs in-product expect) for the same fact - see RESULTS-TASKS.md's human/fixture section for whether they ever disagreed. '{PORT}' is substituted at build time by build_human_authored.py with harness/runner.py's own PORT_A (default 8977), never hardcoded here, so this file stays correct if LFL_LAB_CORPUS_PORT_A is overridden. These bodies are validated against the REAL parseScriptBody() (via brainstorm/probe.py's validate_body(), same validator author_tasks.py's model-authored scripts go through) before being handed to task_runner.py - see that script's own header.",
+  "goals": {
+    "shop-open-blue-widget": {
+      "body": "# rationale: browse to products, open Blue Widget by its exact link text, confirm arrival with expect (mirrors the harness's own url_contains/text_visible checks)\ngo {PORT}/tasks/shop.html\nopen \"Browse products\"\nwait for heading \"Products\"\nopen \"Blue Widget\"\nwait for heading \"Blue Widget\"\nexpect url contains \"item-blue-widget\"\nexpect text \"BLUE-WIDGET-DETAIL-MARKER\""
+    },
+    "shop-open-red-gadget": {
+      "body": "# rationale: browse to products, open Red Gadget by its exact link text, confirm arrival with expect (mirrors the harness's own url_contains/text_visible checks)\ngo {PORT}/tasks/shop.html\nopen \"Browse products\"\nwait for heading \"Products\"\nopen \"Red Gadget\"\nwait for heading \"Red Gadget\"\nexpect url contains \"item-red-gadget\"\nexpect text \"RED-GADGET-DETAIL-MARKER\""
+    },
+    "shop-open-green-gizmo": {
+      "body": "# rationale: browse to products, open Green Gizmo by its exact link text, confirm arrival with expect (mirrors the harness's own url_contains/text_visible checks)\ngo {PORT}/tasks/shop.html\nopen \"Browse products\"\nwait for heading \"Products\"\nopen \"Green Gizmo\"\nwait for heading \"Green Gizmo\"\nexpect url contains \"item-green-gizmo\"\nexpect text \"GREEN-GIZMO-DETAIL-MARKER\""
+    },
+    "shop-open-yellow-widget": {
+      "body": "# rationale: browse to products, open Yellow Widget by its exact link text, confirm arrival with expect (mirrors the harness's own url_contains/text_visible checks)\ngo {PORT}/tasks/shop.html\nopen \"Browse products\"\nwait for heading \"Products\"\nopen \"Yellow Widget\"\nwait for heading \"Yellow Widget\"\nexpect url contains \"item-yellow-widget\"\nexpect text \"YELLOW-WIDGET-DETAIL-MARKER\""
+    },
+    "shop-search-open-blue": {
+      "body": "# rationale: use the page's own search box before opening the named item from the (fixed) results list; wait-for guards each navigation, expect mirrors both harness checks\ngo {PORT}/tasks/shop.html\nopen \"Browse products\"\nwait for heading \"Products\"\nsearch \"camping gear\"\nwait for heading \"Search results\"\nexpect url contains \"search-results\"\nopen \"Blue Widget\"\nwait for heading \"Blue Widget\"\nexpect url contains \"item-blue-widget\"\nexpect text \"BLUE-WIDGET-DETAIL-MARKER\""
+    },
+    "shop-search-open-red": {
+      "body": "# rationale: use the page's own search box before opening the named item from the (fixed) results list; wait-for guards each navigation, expect mirrors both harness checks\ngo {PORT}/tasks/shop.html\nopen \"Browse products\"\nwait for heading \"Products\"\nsearch \"camping gear\"\nwait for heading \"Search results\"\nexpect url contains \"search-results\"\nopen \"Red Gadget\"\nwait for heading \"Red Gadget\"\nexpect url contains \"item-red-gadget\"\nexpect text \"RED-GADGET-DETAIL-MARKER\""
+    },
+    "shop-search-open-green": {
+      "body": "# rationale: use the page's own search box (a different query, same fixed results list) before opening the named item; wait-for guards each navigation, expect mirrors both harness checks\ngo {PORT}/tasks/shop.html\nopen \"Browse products\"\nwait for heading \"Products\"\nsearch \"outdoor equipment\"\nwait for heading \"Search results\"\nexpect url contains \"search-results\"\nopen \"Green Gizmo\"\nwait for heading \"Green Gizmo\"\nexpect url contains \"item-green-gizmo\"\nexpect text \"GREEN-GIZMO-DETAIL-MARKER\""
+    },
+    "shop-search-third-pause": {
+      "body": "# rationale: search, then pause before the index-addressed third-result click - parseScriptBody forbids scripting a bare position click, so pause hands control back exactly where the goal asks\ngo {PORT}/tasks/shop.html\nopen \"Browse products\"\nwait for heading \"Products\"\nsearch \"camping gear\"\nwait for heading \"Search results\"\nexpect url contains \"search-results\"\nexpect text \"SEARCH-RESULTS-MARKER\"\npause \"open the third search result yourself - its position cannot be scripted safely\""
+    },
+    "signup-contact-pause": {
+      "body": "# rationale: fill name+email by label, expect confirms each field's live value before the designed pause hands back control for the submit click\ngo {PORT}/tasks/signup.html\nwait for heading \"Sign up for updates\"\nfill \"Name\" with \"Jordan Rivera\"\nfill \"Email\" with \"jordan@example.com\"\nexpect field \"Name\" equals \"Jordan Rivera\"\nexpect field \"Email\" equals \"jordan@example.com\"\npause \"review the sign-up form and submit it yourself\""
+    },
+    "signup-newsletter-pause": {
+      "body": "# rationale: single-field fill by label, expect confirms the live value before the designed pause\ngo {PORT}/tasks/signup.html\nwait for heading \"Sign up for updates\"\nfill \"Email\" with \"casey@example.com\"\nexpect field \"Email\" equals \"casey@example.com\"\npause \"review the sign-up form and submit it yourself\""
+    },
+    "signup-message-pause": {
+      "body": "# rationale: fills the message textarea by label, expect confirms the trimmed live value before the designed pause\ngo {PORT}/tasks/signup.html\nwait for heading \"Sign up for updates\"\nfill \"Message\" with \"Please add me to the trail newsletter\"\nexpect field \"Message\" equals \"Please add me to the trail newsletter\"\npause \"review the sign-up form and submit it yourself\""
+    },
+    "shop-scroll-item": {
+      "body": "# rationale: opens the item then scrolls down as the goal literally asks; expect text targets the spec marker below the fold (isElementVisible here is CSS/DOM-based, not viewport-based, so the check would pass either way - the scroll step is kept anyway to honestly match what the goal text asks a human to do)\ngo {PORT}/tasks/products.html\nwait for heading \"Products\"\nopen \"Green Gizmo\"\nwait for heading \"Green Gizmo\"\nexpect url contains \"item-green-gizmo\"\nscroll down\nexpect text \"GREEN-GIZMO-SPEC-MARKER\""
+    },
+    "shop-open-item-back-to-products": {
+      "body": "# rationale: full there-and-back path with an expect after every navigation - mirrors the harness's own end-state checks AND gives the steps_executed change-detector a non-navigating marker between navigations, which is exactly what README.md's documented lastResult-reset undercount needs to not misfire on a real 3+-step path\ngo {PORT}/tasks/shop.html\nopen \"Browse products\"\nwait for heading \"Products\"\nexpect text \"PRODUCTS-LIST-MARKER\"\nopen \"Red Gadget\"\nwait for heading \"Red Gadget\"\nexpect url contains \"item-red-gadget\"\nopen \"Back to all products\"\nwait for heading \"Products\"\nexpect url contains \"products.html\"\nexpect text \"PRODUCTS-LIST-MARKER\""
+    },
+    "shop-open-signup": {
+      "body": "# rationale: single hop by exact link text, expect mirrors both harness checks\ngo {PORT}/tasks/shop.html\nopen \"Sign up for updates\"\nwait for heading \"Sign up for updates\"\nexpect url contains \"signup.html\"\nexpect text \"Sign up for updates\""
+    }
+  }
+}
