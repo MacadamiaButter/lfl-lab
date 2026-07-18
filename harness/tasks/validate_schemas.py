@@ -203,6 +203,13 @@ def validate_result_file(doc, fname, violations, warnings):
             for i, row in enumerate(doc["results"]):
                 validate_result_row(row, f"{path}.results[{i}]", violations, warnings)
 
+    # task-result-record.schema.json declares additionalProperties:false on
+    # this top-level object.
+    allowed = set(required) | set(RESULT_FILE_COUNT_FIELDS)
+    for field in doc.keys():
+        if field not in allowed:
+            violations.append(f"{path}: unexpected field {field!r} (not in schema)")
+
 
 def validate_result_row(row, path, violations, warnings):
     if not _check_type(row, "object", path, violations):
@@ -261,6 +268,16 @@ def validate_result_row(row, path, violations, warnings):
     else:
         if _check_type(row["resolved_source"], "string", f"{path}.resolved_source", violations):
             _check_enum(row["resolved_source"], RESOLVED_SOURCE_ENUM, f"{path}.resolved_source", violations)
+
+    # task-result-record.schema.json declares additionalProperties:false on
+    # result_row - start_url/run_verdict are the schema's other optional
+    # properties beyond `required` and resolved_source (both absent on some
+    # legitimate rows, e.g. invalid_author, so not enforced as required
+    # here - see the schema's own per-field descriptions).
+    allowed = set(required) | {"resolved_source", "start_url", "run_verdict"}
+    for field in row.keys():
+        if field not in allowed:
+            violations.append(f"{path}: unexpected field {field!r} (not in schema)")
 
 
 # ---------------------------------------------------------------------------

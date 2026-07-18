@@ -747,6 +747,15 @@ def run_one_scenario(context, sw, scenario, body, timeout_s_override=None, go_re
         row["bucket"] = "harness_error"
         row["checks"] = []
         row["evidence"] = {"error": f"{e.__class__.__name__}: {e}"}
+        # nav_confirms/steps_executed are normally set from run_result after
+        # run_seeded_script() returns (in the try block above) - an
+        # exception raised before that point (e.g. a Playwright TimeoutError
+        # on page.goto()) would otherwise leave this harness_error row
+        # missing both required fields (task-result-record.schema.json).
+        # Default to 0 (nothing ran) without clobbering values already set
+        # if the exception happened after they were assigned.
+        row.setdefault("nav_confirms", 0)
+        row.setdefault("steps_executed", 0)
     finally:
         row["wall_s"] = round(time.monotonic() - t0, 2)
         unseed_script(sw, name)
