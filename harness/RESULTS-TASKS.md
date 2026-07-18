@@ -656,6 +656,57 @@ i.e. the fix, not luck or timing, is what closed it.
   `ensure_http_server()`'s own PID-tracked start/`proc.terminate()` stop -
   no `pkill -f` was used anywhere in this work.
 
+## teach-equivalence smokes (L3, owner-manual, 2026-07-17)
+
+Design doc: `LFL-TERMINAL-RECIPES-THAT-SUCCEED-DESIGN.md` section 6, item L3 -
+the "design doc section 7.5" debt this document's LIMITATIONS carried as
+pending: two manual teach -> save -> run smokes through the real extension UI,
+checking that the UI path behaves like the seeded path every number above came
+from. Run by the operator in a real, non-harness Chrome session (human cursor,
+no panel parking, no dev hooks - the reality the round-2 harness control
+emulates), extension at lfl-terminal `ac3ad3b` (extension/ files byte-unchanged
+since `a9fef37`; commits since touched tests and .gitignore only), model =
+36B (fleet), reached through the extension's own hardcoded `127.0.0.1:1238`
+endpoint via `proxy/lfl-proxy.py` forwarding to the fleet endpoint (this repo's
+own single-upstream loopback proxy). Both goals mirror the on-site condition by
+prepending the exact `ON_SITE_PREAMBLE` sentence to the typed goal text.
+Outcomes here are owner-observed (the `resolved_source: owner_judged` sense)
+and never enter the canonical tables above.
+
+- **Smoke 1 - `signup-contact-pause` equivalent, memory ON.** Memory on makes
+  the teach payload carry the `trusted_context` user-turn field - the exact
+  strict-template path that used to 400 against the fleet model before the
+  `[system, user]` shape fix (`c6a5150`). The call succeeded with no wire
+  error. Attempt-1 draft, verbatim from the approval card: `fill Name with
+  "Jordan Rivera"` / `fill Email with "jordan@example.com"` / `pause "click
+  the Submit button"` - the same three-step shape Finding (e) documents for
+  both benched models' on-site cells. Saved and run: both fields filled, run
+  ended `paused at step 3 (click the Submit button)` - the benched cell's
+  SUCCESS-paused outcome, reproduced through the UI path.
+- **Smoke 2 - `shop-scroll-item` equivalent, memory off.** Attempt-1 draft:
+  `open "Green Gizmo"` / `pause "scroll down to read the specifications"`.
+  Saved and run: navigated to the item page, then `paused at step 2`. HONEST
+  DELTA: the benched 36B on-site cell for this goal ran to completion with a
+  real `scroll` step and scored SUCCESS; this draft delegated the scroll to a
+  human `pause` instead. Under this bench's own scoring that plan would bucket
+  `pause_unexpected`, not success. This is plan-level sampling variance
+  (authoring is sampled at the shipped temperature 0.1 - see "Stochasticity
+  disclosure" above), not a pipeline difference - recorded here rather than
+  smoothed over.
+
+What these two smokes establish: the UI teach path (real typed goal -> shipped
+payload, including the memory-on `trusted_context` variant -> real model ->
+`parseScriptBody()` validation -> approval card -> named save -> `run`)
+behaves like the bench's seeded path - same validator, same run semantics,
+same verdict vocabulary, no wire-format surprises in either memory state.
+Also consistent with the 2x2: both drafts honored the on-site preamble with
+no `go` first step, exactly as the bench found for these two goals (they are
+2 of the 5 preamble-honoring goals in Finding (b)). What they do NOT
+establish: authoring determinism (smoke 2's plan drift shows sampling
+variance is real even at 0.1), or anything about the 12 goals not smoked.
+The seeded-entry limitation below stays in force for the benched numbers; it
+is now qualified by this section rather than open-ended.
+
 ## Result/scenario shapes are now formalized (2026-07-17)
 
 The scenario shape (`harness/tasks/task-scenarios.json`) and the result-row
@@ -688,9 +739,10 @@ a harness-verified one. Purely additive - no number or table above changed.
   (`brainstorm/shipped_payload.js` calls the real `buildBrainstormPayload()`);
   the UI path itself is smoked manually, not benched automatically (design
   doc section 3).
-- **Teach-equivalence smokes (design doc section 7.5) are still pending** -
-  listed here as an open verification item, not yet run as part of this
-  build or the tonight's 2x2.
+- **Teach-equivalence smokes (design doc section 7.5): RUN 2026-07-17** - see
+  "teach-equivalence smokes (L3, owner-manual, 2026-07-17)" above. Two
+  owner-manual UI-path smokes, one per memory state; they qualify, not
+  replace, the seeded-entry limitation directly above.
 - **Fixture pages are model-blind but authored by us.** No adversarial or
   organic-web noise; every marker, label, and link text was chosen to be
   unambiguous.
